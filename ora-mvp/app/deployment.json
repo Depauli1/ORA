@@ -2,48 +2,69 @@
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "shared": {
-    "orUSDToken": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-    "oraToken": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
-    "oraStaking": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
-    "communityIssuance": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
-    "lockupFactory": "0x9A676e781A523b5d0C0e43731313A708CB607508"
+    "orUSDToken": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+    "oraToken": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+    "oraStaking": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+    "communityIssuance": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
+    "lockupFactory": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"
   },
   "branches": {
     "ETH": {
       "native": true,
       "collSymbol": "ETH",
-      "priceFeed": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-      "sortedTroves": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-      "troveManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "activePool": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-      "stabilityPool": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-      "gasPool": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
-      "defaultPool": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-      "collSurplusPool": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-      "borrowerOperations": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
-      "hintHelpers": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-      "multiTroveGetter": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
+      "priceFeed": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "ethUsdSettable": true,
+      "sortedTroves": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "troveManager": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "activePool": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "stabilityPool": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      "gasPool": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "defaultPool": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      "collSurplusPool": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+      "borrowerOperations": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "hintHelpers": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+      "multiTroveGetter": "0x9A676e781A523b5d0C0e43731313A708CB607508"
     },
     "wstETH": {
       "native": false,
       "collSymbol": "wstETH",
-      "collToken": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
-      "priceFeed": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
-      "sortedTroves": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
-      "troveManager": "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
-      "activePool": "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
-      "stabilityPool": "0x9E545E3C0baAB3E08CdfD552C960A1050f373042",
-      "gasPool": "0xa82fF9aFd8f496c3d6ac40E2a0F282E47488CFc9",
-      "defaultPool": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8",
-      "collSurplusPool": "0x851356ae760d987E095750cCeb3bC6014560891C",
-      "borrowerOperations": "0xf5059a5D33d5853360D16C683c16e67980206f36",
-      "hintHelpers": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
-      "multiTroveGetter": "0x998abeb3E57409262aE5b751f60747921B33613E",
-      "feeReceiver": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49"
+      "collToken": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "priceFeed": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "ethUsdSettable": true,
+      "stEthEthAggregator": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "sortedTroves": "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
+      "troveManager": "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
+      "activePool": "0x9E545E3C0baAB3E08CdfD552C960A1050f373042",
+      "stabilityPool": "0xa82fF9aFd8f496c3d6ac40E2a0F282E47488CFc9",
+      "gasPool": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8",
+      "defaultPool": "0x851356ae760d987E095750cCeb3bC6014560891C",
+      "collSurplusPool": "0xf5059a5D33d5853360D16C683c16e67980206f36",
+      "borrowerOperations": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
+      "hintHelpers": "0x998abeb3E57409262aE5b751f60747921B33613E",
+      "multiTroveGetter": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
+      "feeReceiver": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528"
     }
   },
   "abis": {
     "priceFeed": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_aggregator",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_timeout",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
       {
         "anonymous": false,
         "inputs": [
@@ -56,6 +77,58 @@
         ],
         "name": "LastGoodPriceUpdated",
         "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "bool",
+            "name": "_live",
+            "type": "bool"
+          }
+        ],
+        "name": "OracleStatusChanged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "NAME",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "aggregator",
+        "outputs": [
+          {
+            "internalType": "contract AggregatorV3Interface",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "feedDecimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
       },
       {
         "inputs": [],
@@ -84,14 +157,21 @@
         "type": "function"
       },
       {
-        "inputs": [
+        "inputs": [],
+        "name": "lastGoodPrice",
+        "outputs": [
           {
             "internalType": "uint256",
-            "name": "price",
+            "name": "",
             "type": "uint256"
           }
         ],
-        "name": "setPrice",
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "oracleLive",
         "outputs": [
           {
             "internalType": "bool",
@@ -99,7 +179,453 @@
             "type": "bool"
           }
         ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "timeout",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "priceFeedWstETH": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_ethUsdAggregator",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_stEthEthAggregator",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_wstETH",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_timeout",
+            "type": "uint256"
+          }
+        ],
         "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "bool",
+            "name": "_active",
+            "type": "bool"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_stEthEthRate",
+            "type": "uint256"
+          }
+        ],
+        "name": "DepegCircuitBreaker",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_lastGoodPrice",
+            "type": "uint256"
+          }
+        ],
+        "name": "LastGoodPriceUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "bool",
+            "name": "_live",
+            "type": "bool"
+          }
+        ],
+        "name": "OracleStatusChanged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "DEPEG_THRESHOLD",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "NAME",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "RATE_CAP",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "depegged",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "ethUsdAggregator",
+        "outputs": [
+          {
+            "internalType": "contract AggregatorV3Interface",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "ethUsdDecimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "fetchPrice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getPrice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getStEthEthRate",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "rate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "ok",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lastGoodPrice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "oracleLive",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "stEthEthAggregator",
+        "outputs": [
+          {
+            "internalType": "contract AggregatorV3Interface",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "stEthEthDecimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "timeout",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "wstETH",
+        "outputs": [
+          {
+            "internalType": "contract IWstETHRate",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "settableAggregator": [
+      {
+        "inputs": [
+          {
+            "internalType": "uint8",
+            "name": "decimals_",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "description_",
+            "type": "string"
+          },
+          {
+            "internalType": "int256",
+            "name": "initialAnswer_",
+            "type": "int256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "description",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint80",
+            "name": "",
+            "type": "uint80"
+          }
+        ],
+        "name": "getRoundData",
+        "outputs": [
+          {
+            "internalType": "uint80",
+            "name": "",
+            "type": "uint80"
+          },
+          {
+            "internalType": "int256",
+            "name": "",
+            "type": "int256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint80",
+            "name": "",
+            "type": "uint80"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "latestRoundData",
+        "outputs": [
+          {
+            "internalType": "uint80",
+            "name": "",
+            "type": "uint80"
+          },
+          {
+            "internalType": "int256",
+            "name": "",
+            "type": "int256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint80",
+            "name": "",
+            "type": "uint80"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "age_",
+            "type": "uint256"
+          }
+        ],
+        "name": "makeStale",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "int256",
+            "name": "answer_",
+            "type": "int256"
+          }
+        ],
+        "name": "setAnswer",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "version",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
         "type": "function"
       }
     ],

@@ -34,7 +34,13 @@ async function main() {
   const bo2 = new ethers.Contract(B2.borrowerOperations, dep.abis.borrowerOperationsERC20, alice);
   const sp2 = new ethers.Contract(B2.stabilityPool, dep.abis.stabilityPoolERC20, alice);
   const tm2 = new ethers.Contract(B2.troveManager, dep.abis.troveManager, carol);
-  const pf2 = new ethers.Contract(B2.priceFeed, dep.abis.priceFeed, treasury);
+  const pf1 = new ethers.Contract(dep.branches.ETH.priceFeed, dep.abis.priceFeed, provider);
+  const pf2 = new ethers.Contract(B2.priceFeed, dep.abis.priceFeedWstETH, treasury);
+  const aggRate = new ethers.Contract(B2.stEthEthAggregator, dep.abis.settableAggregator, treasury);
+
+  // oracle adapters sanity
+  console.log("[oracle] ETH/USD:", f(await pf1.getPrice()), "| wstETH/USD:", f(await pf2.getPrice()),
+    "| oracleLive:", await pf2.oracleLive());
 
   // faucet + approve + open trove
   await (await wst.faucet(E("10"))).wait();
@@ -52,11 +58,15 @@ async function main() {
   await (await sp2.provideToSP(E("3000"), Z)).wait();
   console.log("[wstETH] Alice SP deposit:", f(await sp2.getCompoundedLUSDDeposit(aliceAddr)));
 
-  // crash wstETH 20% -> $1920; the 2.5 wstETH / ~5000 debt trove sinks
-  await (await pf2.setPrice(E("1920"))).wait();
+  // DEPEG: stETH/ETH market rate crashes to 0.80 -> circuit breaker trips,
+  // wstETH/USD reprices to 2000 * 0.80 * 1.2 = $1920
+  await (await aggRate.setAnswer(E("0.8"))).wait();
+  await (await pf2.fetchPrice()).wait();
+  console.log("[depeg] rate 0.80 — circuit breaker active:", await pf2.depegged(),
+    "| wstETH/USD:", f(await pf2.getPrice()));
   const victim = "0x71bE63f3384f5fb98995898A86B02Fb2426c5788"; // signer 11
   const icr = await tm2.getCurrentICR(victim, E("1920"));
-  console.log("[wstETH] crashed to $1920 — victim ICR:", (Number(icr) / 1e16).toFixed(1) + "%");
+  console.log("[wstETH] victim ICR at depegged price:", (Number(icr) / 1e16).toFixed(1) + "%");
   await (await tm2.liquidate(victim)).wait();
   console.log("[wstETH] liquidated! Alice SP wstETH gain:", f(await sp2.getDepositorETHGain(aliceAddr)));
 
@@ -68,11 +78,23 @@ async function main() {
   await (await bo1.repayLUSD(E("1000"), Z, Z)).wait();
   console.log("[cross] repaid 1000 orUSD (minted on wstETH branch) into ETH-branch trove ✓");
 
-  // restore price
-  await (await pf2.setPrice(E("2400"))).wait();
-  console.log("[wstETH] price restored — branch TCR:", (Number(await tm2.getTCR(E("2400"))) / 1e16).toFixed(1) + "%");
+  // restore peg -> circuit breaker resets
+  await (await aggRate.setAnswer(E("1"))).wait();
+  await (await pf2.fetchPrice()).wait();
+  console.log("[depeg] peg restored — circuit breaker active:", await pf2.depegged(),
+    "| wstETH/USD:", f(await pf2.getPrice()));
+  console.log("[wstETH] branch TCR:", (Number(await tm2.getTCR(E("2400"))) / 1e16).toFixed(1) + "%");
 
-  console.log("\nPHASE 1 SMOKE TEST PASSED ✓");
+  // STALENESS: age the stETH/ETH round past the 48h timeout -> fallback to lastGoodPrice
+  await (await aggRate.makeStale(60 * 3600)).wait();
+  await (await pf2.fetchPrice()).wait();
+  console.log("[stale] feed aged 60h — oracleLive:", await pf2.oracleLive(),
+    "| price falls back to lastGoodPrice:", f(await pf2.getPrice()));
+  await (await aggRate.setAnswer(E("1"))).wait();
+  await (await pf2.fetchPrice()).wait();
+  console.log("[stale] feed refreshed — oracleLive:", await pf2.oracleLive());
+
+  console.log("\nPHASE 1.5 SMOKE TEST PASSED ✓");
 }
 
 main().catch(e => { console.error("SMOKE TEST FAILED:", e.shortMessage || e.message); process.exit(1); });

@@ -9,6 +9,15 @@ const path = require("path");
 const { ethers, network } = hre;
 const maxBytes32 = "0x" + "f".repeat(64);
 
+// Real Chainlink feeds per public network (env-overridable). Validated at
+// deploy time: adapter constructors revert on an invalid/stale feed response.
+const REAL_FEEDS = {
+  baseSepolia: {
+    ethUsd: process.env.ORA_ETHUSD_FEED || "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1"
+  }
+};
+const ORACLE_TIMEOUT = 48 * 3600; // generous staleness window for testnets
+
 async function main() {
   const [deployer, , , , treasury] = await ethers.getSigners();
   console.log(`Network: ${network.name} | Deployer: ${deployer.address}`);
@@ -22,9 +31,33 @@ async function main() {
   };
   const a = c => c.getAddress();
 
+  // ---------------- Oracles ----------------
+  console.log("\n— Oracles —");
+  const wstETH = await deploy("MockWstETH");
+
+  let ethUsdAggregatorAddr;
+  let ethUsdSettable;
+  if (REAL_FEEDS[network.name]) {
+    ethUsdAggregatorAddr = REAL_FEEDS[network.name].ethUsd;
+    ethUsdSettable = false;
+    console.log(`  using real Chainlink ETH/USD: ${ethUsdAggregatorAddr}`);
+  } else {
+    const aggEthUsd = await deploy("SettableAggregator", 8, "ETH / USD", 2000n * 10n ** 8n);
+    ethUsdAggregatorAddr = await a(aggEthUsd);
+    ethUsdSettable = true;
+  }
+  // No canonical stETH/ETH feed on Base Sepolia -> settable mock everywhere
+  // (also powers the depeg circuit-breaker demo).
+  const aggStEthEth = await deploy("SettableAggregator", 18, "stETH / ETH", ethers.parseEther("1"));
+
+  const priceFeed = await deploy("ChainlinkPriceFeed", ethUsdAggregatorAddr, ORACLE_TIMEOUT);
+  const priceFeed2 = await deploy("WstETHPriceFeed",
+    ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH), ORACLE_TIMEOUT);
+  console.log(`  ETH/USD: $${ethers.formatEther(await priceFeed.getPrice())}` +
+    ` | wstETH/USD: $${ethers.formatEther(await priceFeed2.getPrice())}`);
+
   // ---------------- Branch 1: native ETH ----------------
   console.log("\n— Branch 1: native ETH —");
-  const priceFeed = await deploy("PriceFeedTestnet");
   const sortedTroves = await deploy("SortedTroves");
   const troveManager = await deploy("TroveManager");
   const activePool = await deploy("ActivePool");
@@ -75,13 +108,10 @@ async function main() {
     await a(oraToken), await a(orUSD), await a(troveManager),
     await a(borrowerOperations), await a(activePool))).wait();
   await (await communityIssuance.setAddresses(await a(oraToken), await a(stabilityPool))).wait();
-  await (await priceFeed.setPrice(ethers.parseEther("2000"))).wait();
-  console.log("  branch 1 wired — ETH price $2000");
+  console.log("  branch 1 wired — ChainlinkPriceFeed live");
 
   // ---------------- Branch 2: wstETH (ERC20 collateral) ----------------
   console.log("\n— Branch 2: wstETH —");
-  const wstETH = await deploy("MockWstETH");
-  const priceFeed2 = await deploy("PriceFeedTestnet");
   const sortedTroves2 = await deploy("SortedTroves");
   const troveManager2 = await deploy("TroveManager"); // same audited bytecode
   const activePool2 = await deploy("ActivePoolERC20");
@@ -129,8 +159,7 @@ async function main() {
   await (await collSurplusPool2.setCollToken(await a(wstETH))).wait();
   await (await hintHelpers2.setAddresses(await a(sortedTroves2), await a(troveManager2))).wait();
   await (await feeReceiver2.setAddresses(await a(troveManager2), await a(borrowerOperations2))).wait();
-  await (await priceFeed2.setPrice(ethers.parseEther("2400"))).wait();
-  console.log("  branch 2 wired — wstETH price $2400");
+  console.log("  branch 2 wired — WstETHPriceFeed live");
 
   // ---------------- Export ----------------
   const abi = name => {
@@ -138,7 +167,8 @@ async function main() {
       `contracts/${name}.sol/${name}.json`,
       `contracts/LQTY/${name}.sol/${name}.json`,
       `contracts/TestContracts/${name}.sol/${name}.json`,
-      `contracts/branches/${name}.sol/${name}.json`
+      `contracts/branches/${name}.sol/${name}.json`,
+      `contracts/oracles/${name}.sol/${name}.json`
     ];
     for (const h of hits) {
       const p = path.join(__dirname, "..", "artifacts", h);
@@ -162,6 +192,8 @@ async function main() {
         native: true,
         collSymbol: "ETH",
         priceFeed: await a(priceFeed),
+        ethUsdAggregator: ethUsdAggregatorAddr,
+        ethUsdSettable,
         sortedTroves: await a(sortedTroves),
         troveManager: await a(troveManager),
         activePool: await a(activePool),
@@ -178,6 +210,9 @@ async function main() {
         collSymbol: "wstETH",
         collToken: await a(wstETH),
         priceFeed: await a(priceFeed2),
+        ethUsdAggregator: ethUsdAggregatorAddr,
+        ethUsdSettable,
+        stEthEthAggregator: await a(aggStEthEth),
         sortedTroves: await a(sortedTroves2),
         troveManager: await a(troveManager2),
         activePool: await a(activePool2),
@@ -192,7 +227,9 @@ async function main() {
       }
     },
     abis: {
-      priceFeed: abi("PriceFeedTestnet"),
+      priceFeed: abi("ChainlinkPriceFeed"),
+      priceFeedWstETH: abi("WstETHPriceFeed"),
+      settableAggregator: abi("SettableAggregator"),
       troveManager: abi("TroveManager"),
       borrowerOperations: abi("BorrowerOperations"),
       borrowerOperationsERC20: abi("BorrowerOperationsERC20"),

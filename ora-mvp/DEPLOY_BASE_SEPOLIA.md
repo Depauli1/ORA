@@ -39,8 +39,14 @@ This deploys and wires, in one run:
 - **ETH branch** — full native-ETH core (TroveManager, pools, BorrowerOperations)
 - **wstETH branch** — ERC20 pool suite + MockWstETH (public faucet, 1000/call)
 - **Shared** — orUSD (both branches registered), ORA token, ORA staking
-- Testnet price feeds: ETH $2,000 / wstETH $2,400 (settable — no Chainlink
-  feeds are wired yet; that's the Phase 1.5 oracle-adapter task)
+- **Real oracle adapters (Phase 1.5)** — the ETH branch uses the live Chainlink
+  ETH/USD feed on Base Sepolia (default `0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1`,
+  override with `ORA_ETHUSD_FEED=<address>`; the adapter constructor reverts if
+  the feed doesn't return a valid in-date price, so a wrong address fails loudly).
+  The wstETH branch composes ETH/USD x stETH/ETH x wstETH exchange rate with a
+  depeg circuit breaker at 0.96; since Base Sepolia has no canonical stETH/ETH
+  feed, that leg uses a SettableAggregator mock (which doubles as the depeg demo).
+  48h staleness timeout; broken/stale feeds fall back to lastGoodPrice.
 
 Addresses + ABIs are written to `app/deployment-baseSepolia.json` — commit it.
 
@@ -65,10 +71,11 @@ ORA_RPC_URL=https://sepolia.base.org npx hardhat verify --network baseSepolia <A
 ORA_RPC_URL=https://base-sepolia.g.alchemy.com/v2/<key> npx hardhat run scripts/deploy-public.js --network baseSepolia
 ```
 
-## What the frontend needs next (Phase 1.5)
+## Frontend
 
-- Network switcher: load `deployment-baseSepolia.json`, browser connects
-  straight to `https://sepolia.base.org` (browsers are not behind the sandbox
-  firewall) with MetaMask for signing.
-- Real oracle adapters (Chainlink ETH/USD + wstETH exchange-rate feed with
-  depeg circuit breaker) to replace PriceFeedTestnet.
+Done (Phase 1.5): the app has a **network switcher** (Local / Base Sepolia).
+Base Sepolia mode loads `deployment-baseSepolia.json`, reads via
+`https://sepolia.base.org` directly from the browser (browsers are not behind
+the sandbox firewall), and signs with MetaMask (auto adds/switches to chain
+84532). Until `deployment-baseSepolia.json` is committed, the switcher shows
+a friendly "not deployed yet" notice.

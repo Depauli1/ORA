@@ -75,8 +75,13 @@
       fungibility and wstETH liquidations
 - [x] Base Sepolia deployment kit (`ora-mvp/DEPLOY_BASE_SEPOLIA.md`) — one-command
       deploy from any open-internet machine (Arena sandbox blocks public RPCs)
-- [ ] Phase 1.5: real oracle adapters (Chainlink + LST rate feeds, depeg circuit
-      breakers) to replace testnet price feeds; frontend Base Sepolia switcher
+- [x] **Phase 1.5: real oracle adapters** — `ChainlinkPriceFeed` (ETH/USD) and
+      `WstETHPriceFeed` (ETH/USD x stETH/ETH x wstETH rate) with depeg circuit
+      breaker at 0.96, 1.0 rate cap, staleness fallback to lastGoodPrice; on
+      Base Sepolia the ETH branch reads the live Chainlink ETH/USD feed
+- [x] **Phase 1.5: public face** — frontend network switcher (Local / Base
+      Sepolia) with MetaMask signing (auto chain add/switch), oracle status
+      badge, and a depeg-simulator that trips the on-chain circuit breaker
 - [ ] Branch ORA incentives + per-branch fee distribution (Phase 2 tokenomics)
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)

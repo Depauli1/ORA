@@ -1,4 +1,6 @@
-/* ORA Protocol — Phase 1 frontend: multi-branch (ETH + wstETH) */
+/* ORA Protocol — Phase 1.5 frontend:
+ * multi-branch (ETH + wstETH) · Chainlink oracle adapters with depeg CB
+ * network switcher: local demo chain / Base Sepolia with MetaMask       */
 "use strict";
 
 const $ = id => document.getElementById(id);
@@ -6,7 +8,13 @@ const Z = "0x0000000000000000000000000000000000000000";
 const MAX_FEE = ethers.parseEther("0.05");
 const MCR = 1.1;
 
-// Well-known hardhat testnet keys (public, demo only)
+const BASE_SEPOLIA = {
+  chainIdHex: "0x14a34", // 84532
+  rpc: "https://sepolia.base.org",
+  explorer: "https://sepolia.basescan.org"
+};
+
+// Well-known hardhat testnet keys (public, local demo only)
 const ACCOUNTS = {
   alice:  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
   bob:    "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
@@ -14,8 +22,9 @@ const ACCOUNTS = {
 };
 const TREASURY_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a";
 
-let provider, wallet, treasury, dep, C = {}, price = 0, busy = false;
+let provider, wallet = null, treasury = null, dep, C = {}, price = 0, busy = false;
 let branch = "ETH";
+let netMode = "local";
 
 const fmt = (v, d = 2) =>
   Number(ethers.formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: d });
@@ -23,6 +32,8 @@ const fmtUsd = (v, d = 2) => "$" + fmt(v, d);
 const short = a => a.slice(0, 6) + "…" + a.slice(-4);
 const isNative = () => dep.branches[branch].native;
 const collSym = () => dep.branches[branch].collSymbol;
+const bcfg = () => dep.branches[branch];
+const myAddr = () => wallet ? wallet.address : Z;
 
 function toast(msg, ms = 4200) {
   const t = $("toast");
@@ -39,6 +50,7 @@ function reason(e) {
 }
 
 async function tx(label, fn) {
+  if (!wallet) return toast("Connect a wallet first");
   if (busy) return;
   busy = true;
   try {
@@ -54,30 +66,31 @@ async function tx(label, fn) {
   }
 }
 
-function connectContracts(signer) {
-  const B = dep.branches[branch], S = dep.shared, A = dep.abis;
-  C.priceFeed = new ethers.Contract(B.priceFeed, A.priceFeed, signer);
-  C.troveManager = new ethers.Contract(B.troveManager, A.troveManager, signer);
+function connectContracts() {
+  const runner = wallet ?? provider;
+  const B = bcfg(), S = dep.shared, A = dep.abis;
+  C.priceFeed = new ethers.Contract(B.priceFeed, B.native ? A.priceFeed : A.priceFeedWstETH, runner);
+  C.aggEth = B.ethUsdSettable
+    ? new ethers.Contract(B.ethUsdAggregator, A.settableAggregator, runner) : null;
+  C.aggRate = B.stEthEthAggregator
+    ? new ethers.Contract(B.stEthEthAggregator, A.settableAggregator, runner) : null;
+  C.troveManager = new ethers.Contract(B.troveManager, A.troveManager, runner);
   C.borrowerOps = new ethers.Contract(
-    B.borrowerOperations,
-    B.native ? A.borrowerOperations : A.borrowerOperationsERC20,
-    signer);
+    B.borrowerOperations, B.native ? A.borrowerOperations : A.borrowerOperationsERC20, runner);
   C.stabilityPool = new ethers.Contract(
-    B.stabilityPool,
-    B.native ? A.stabilityPool : A.stabilityPoolERC20,
-    signer);
-  C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, signer);
-  C.collToken = B.native ? null : new ethers.Contract(B.collToken, A.mockWstETH, signer);
-  C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, signer);
-  C.ora = new ethers.Contract(S.oraToken, A.oraToken, signer);
-  C.staking = new ethers.Contract(S.oraStaking, A.oraStaking, signer);
+    B.stabilityPool, B.native ? A.stabilityPool : A.stabilityPoolERC20, runner);
+  C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, runner);
+  C.collToken = B.native ? null : new ethers.Contract(B.collToken, A.mockWstETH, runner);
+  C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
+  C.ora = new ethers.Contract(S.oraToken, A.oraToken, runner);
+  C.staking = new ethers.Contract(S.oraStaking, A.oraStaking, runner);
 }
 
 function setAccount(name) {
   const w = new ethers.Wallet(ACCOUNTS[name], provider);
   wallet = new ethers.NonceManager(w);
   wallet.address = w.address;
-  connectContracts(wallet);
+  connectContracts();
   $("addr").textContent = w.address;
 }
 
@@ -88,33 +101,114 @@ function setBranch(name) {
   document.querySelectorAll(".collsym").forEach(el => (el.textContent = collSym()));
   $("btnWstFaucet").style.display = isNative() ? "none" : "inline-block";
   $("balWst").style.display = isNative() ? "none" : "inline";
-  connectContracts(wallet);
+  $("depegRow").style.display = isNative() ? "none" : "flex";
+  updateSimControls();
+  connectContracts();
+}
+
+function updateSimControls() {
+  const settable = !!bcfg().ethUsdSettable;
+  document.querySelectorAll("#priceRow button, #priceRow input").forEach(el => (el.disabled = !settable));
+  $("simNote").style.display = settable ? "none" : "inline";
+}
+
+async function setNetwork(mode) {
+  try {
+    if (mode === "baseSepolia") {
+      const r = await fetch("deployment-baseSepolia.json");
+      if (!r.ok) {
+        toast("Base Sepolia not deployed yet — run the DEPLOY_BASE_SEPOLIA.md runbook, commit deployment-baseSepolia.json, and reload.", 9000);
+        $("networkSelect").value = netMode;
+        return;
+      }
+      dep = await r.json();
+      netMode = "baseSepolia";
+      provider = new ethers.JsonRpcProvider(BASE_SEPOLIA.rpc, 84532, { staticNetwork: true });
+      wallet = null; treasury = null;
+      $("accountSelect").style.display = "none";
+      $("btnConnect").style.display = "inline-block";
+      $("btnFaucet").disabled = true;
+      $("addr").textContent = "read-only — connect a wallet to transact";
+    } else {
+      dep = await (await fetch("deployment.json")).json();
+      netMode = "local";
+      provider = new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true });
+      treasury = new ethers.NonceManager(new ethers.Wallet(TREASURY_KEY, provider));
+      $("accountSelect").style.display = "inline-block";
+      $("btnConnect").style.display = "none";
+      $("btnFaucet").disabled = false;
+      setAccount($("accountSelect").value);
+    }
+    setBranch("ETH");
+    await refresh();
+  } catch (e) {
+    toast("Network switch failed: " + reason(e), 8000);
+  }
+}
+
+async function connectWallet() {
+  if (!window.ethereum) return toast("No wallet extension found — install MetaMask (or a compatible wallet) to use Base Sepolia.", 8000);
+  try {
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BASE_SEPOLIA.chainIdHex }]
+      });
+    } catch (err) {
+      if (err.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: BASE_SEPOLIA.chainIdHex,
+            chainName: "Base Sepolia",
+            rpcUrls: [BASE_SEPOLIA.rpc],
+            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+            blockExplorerUrls: [BASE_SEPOLIA.explorer]
+          }]
+        });
+      } else { throw err; }
+    }
+    const bp = new ethers.BrowserProvider(window.ethereum);
+    await bp.send("eth_requestAccounts", []);
+    const signer = await bp.getSigner();
+    signer.address = await signer.getAddress();
+    provider = bp;
+    wallet = signer;
+    connectContracts();
+    $("addr").textContent = wallet.address;
+    $("btnConnect").textContent = short(wallet.address);
+    toast("✓ Wallet connected to Base Sepolia");
+    await refresh();
+  } catch (e) {
+    toast("Wallet connection failed: " + reason(e), 8000);
+  }
 }
 
 // Ensure the branch BorrowerOperations may pull our collateral tokens
 async function ensureAllowance(needed) {
-  const allowance = await C.collToken.allowance(wallet.address, dep.branches[branch].borrowerOperations);
+  const allowance = await C.collToken.allowance(myAddr(), bcfg().borrowerOperations);
   if (allowance < needed) {
     toast("Approving " + collSym() + "…", 30000);
-    const t = await C.collToken.approve(dep.branches[branch].borrowerOperations, ethers.MaxUint256);
+    const t = await C.collToken.approve(bcfg().borrowerOperations, ethers.MaxUint256);
     await t.wait();
   }
 }
 
 async function refresh() {
   try {
-    const me = wallet.address;
+    const me = myAddr();
     const p = await C.priceFeed.getPrice();
     const [tcr, recovery, supply, nTroves, spTotal, rate,
            ethBal, orusdBal, oraBal, wstBal, trove, entire,
-           spDep, spEth, spOra, stake, stkEth, stkOrusd] = await Promise.all([
+           spDep, spEth, spOra, stake, stkEth, stkOrusd,
+           oracleLive, stRate] = await Promise.all([
       C.troveManager.getTCR(p),
       C.troveManager.checkRecoveryMode(p),
       C.orUSD.totalSupply(),
       C.troveManager.getTroveOwnersCount(),
       C.stabilityPool.getTotalLUSDDeposits(),
       C.troveManager.getBorrowingRateWithDecay(),
-      provider.getBalance(me),
+      provider.getBalance(me === Z ? bcfg().troveManager : me),
       C.orUSD.balanceOf(me),
       C.ora.balanceOf(me),
       C.collToken ? C.collToken.balanceOf(me) : 0n,
@@ -125,7 +219,9 @@ async function refresh() {
       C.stabilityPool.getDepositorLQTYGain(me),
       C.staking.stakes(me),
       C.staking.getPendingETHGain(me),
-      C.staking.getPendingLUSDGain(me)
+      C.staking.getPendingLUSDGain(me),
+      C.priceFeed.oracleLive(),
+      isNative() ? [0n, true] : C.priceFeed.getStEthEthRate()
     ]);
 
     price = Number(ethers.formatEther(p));
@@ -138,9 +234,23 @@ async function refresh() {
     $("stTroves").textContent = nTroves.toString();
     $("stSp").textContent = fmt(spTotal, 0) + " orUSD";
     $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
-    $("simPrice").textContent = fmtUsd(p);
 
-    $("balEth").textContent = fmt(ethBal) + " ETH";
+    // Oracle status badge (depeg judged client-side from the live rate)
+    const rateNum = isNative() ? 1 : Number(ethers.formatEther(stRate[0]));
+    const depeg = !isNative() && stRate[1] && rateNum < 0.96;
+    $("stOracle").textContent = !oracleLive ? "FALLBACK" : depeg ? "DEPEG CB" : "Chainlink ✓";
+    $("stOracle").className = !oracleLive ? "warn" : depeg ? "bad" : "good";
+    if (!isNative()) $("simRate").textContent = rateNum.toFixed(3);
+
+    // ETH/USD shown in the simulator row (branch price may be derived)
+    if (C.aggEth) {
+      const rd = await C.aggEth.latestRoundData();
+      $("simPrice").textContent = "$" + (Number(rd[1]) / 1e8).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    } else {
+      $("simPrice").textContent = fmtUsd(p) + (isNative() ? "" : " (wstETH)");
+    }
+
+    $("balEth").textContent = wallet ? fmt(ethBal) + " ETH" : "—";
     $("balOrusd").textContent = fmt(orusdBal) + " orUSD";
     $("balOra").textContent = fmt(oraBal) + " ORA";
     if (C.collToken) $("balWst").textContent = fmt(wstBal) + " wstETH";
@@ -200,7 +310,7 @@ async function refreshTrovesTable() {
     const tr = document.createElement("tr");
     if (liq) tr.className = "liq";
     tr.innerHTML =
-      `<td title="${owner}">${short(owner)}${owner === wallet.address ? " (you)" : ""}</td>` +
+      `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}</td>` +
       `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
       `<td class="${liq ? "bad" : icr < 150 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
       `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button></td>`;
@@ -214,12 +324,10 @@ async function refreshTrovesTable() {
 
 /* ---------- wire up UI ---------- */
 async function main() {
-  provider = new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true });
-  dep = await (await fetch("deployment.json")).json();
-  treasury = new ethers.NonceManager(new ethers.Wallet(TREASURY_KEY, provider));
-  setAccount("alice");
-  setBranch("ETH");
+  await setNetwork("local");
 
+  $("networkSelect").addEventListener("change", e => setNetwork(e.target.value));
+  $("btnConnect").addEventListener("click", connectWallet);
   $("accountSelect").addEventListener("change", e => { setAccount(e.target.value); refresh(); });
   document.querySelectorAll(".tab").forEach(t =>
     t.addEventListener("click", () => { setBranch(t.dataset.branch); refresh(); }));
@@ -234,6 +342,7 @@ async function main() {
     if (isNative()) {
       tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, Z, Z, { value: coll }));
     } else {
+      if (!wallet) return toast("Connect a wallet first");
       try { await ensureAllowance(coll); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
       tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, coll, Z, Z));
     }
@@ -244,6 +353,7 @@ async function main() {
     if (isNative()) {
       tx("Add collateral", () => C.borrowerOps.addColl(Z, Z, { value: adj() }));
     } else {
+      if (!wallet) return toast("Connect a wallet first");
       try { await ensureAllowance(adj()); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
       tx("Add collateral", () => C.borrowerOps.addColl(adj(), Z, Z));
     }
@@ -268,22 +378,38 @@ async function main() {
     tx("Stake ORA", () => C.staking.stake(stkAmt())));
   $("btnUnstake").addEventListener("click", () =>
     tx("Unstake ORA", () => C.staking.unstake(stkAmt())));
-  $("btnFaucet").addEventListener("click", () =>
-    tx("ORA faucet", () => C.ora.connect(treasury).transfer(wallet.address, ethers.parseEther("100"))));
-
-  document.querySelectorAll("button[data-bump]").forEach(b =>
-    b.addEventListener("click", () => {
-      const newPrice = price * (1 + Number(b.dataset.bump) / 100);
-      tx(`Set ${collSym()} price to $${newPrice.toFixed(0)}`,
-        () => C.priceFeed.setPrice(ethers.parseEther(newPrice.toFixed(6))));
-    }));
-  $("btnSetPrice").addEventListener("click", () => {
-    const v = parseFloat($("simInput").value);
-    if (!v || v <= 0) return toast("Enter a valid price");
-    tx(`Set ${collSym()} price to $${v}`, () => C.priceFeed.setPrice(ethers.parseEther(String(v))));
+  $("btnFaucet").addEventListener("click", () => {
+    if (!treasury) return toast("ORA faucet is local-testnet only — earn ORA via the ETH-branch Stability Pool on public nets.", 7000);
+    tx("ORA faucet", () => C.ora.connect(treasury).transfer(myAddr(), ethers.parseEther("100")));
   });
 
-  await refresh();
+  // Market simulator: ETH/USD (settable aggregator only)
+  const setEthUsd = async v =>
+    tx(`Set ETH/USD to $${v.toFixed(0)}`, () => C.aggEth.setAnswer(BigInt(Math.round(v * 1e8))));
+  document.querySelectorAll("button[data-bump]").forEach(b =>
+    b.addEventListener("click", async () => {
+      if (!C.aggEth) return toast("Live Chainlink feed — not settable");
+      const rd = await C.aggEth.latestRoundData();
+      setEthUsd(Number(rd[1]) / 1e8 * (1 + Number(b.dataset.bump) / 100));
+    }));
+  $("btnSetPrice").addEventListener("click", () => {
+    if (!C.aggEth) return toast("Live Chainlink feed — not settable");
+    const v = parseFloat($("simInput").value);
+    if (!v || v <= 0) return toast("Enter a valid price");
+    setEthUsd(v);
+  });
+
+  // Depeg simulator: stETH/ETH rate (always settable on testnets)
+  document.querySelectorAll("button[data-rate]").forEach(b =>
+    b.addEventListener("click", () => {
+      if (!C.aggRate) return;
+      const r = b.dataset.rate;
+      tx(`Set stETH/ETH rate to ${r}`, async () => {
+        await (await C.aggRate.setAnswer(ethers.parseEther(r))).wait();
+        return C.priceFeed.fetchPrice(); // trip/reset the on-chain circuit breaker
+      });
+    }));
+
   setInterval(() => { if (!busy) refresh(); }, 8000);
 }
 

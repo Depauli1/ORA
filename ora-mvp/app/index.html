@@ -17,11 +17,18 @@
     </div>
   </div>
   <div class="account">
+    <div style="display:flex; gap:8px">
+    <select id="networkSelect">
+      <option value="local">Local testnet</option>
+      <option value="baseSepolia">Base Sepolia</option>
+    </select>
+    <button id="btnConnect" style="display:none">Connect wallet</button>
     <select id="accountSelect">
       <option value="alice">Alice (demo)</option>
       <option value="bob">Bob (demo)</option>
       <option value="carol">Carol (liquidator)</option>
     </select>
+    </div>
     <div class="balances">
       <span id="balEth">— ETH</span>
       <span id="balOrusd" class="orusd">— orUSD</span>
@@ -40,6 +47,7 @@
   <div class="stat"><label>Troves</label><b id="stTroves">—</b></div>
   <div class="stat"><label>Stability Pool</label><b id="stSp">—</b></div>
   <div class="stat"><label>Borrow Fee</label><b id="stFee">—</b></div>
+  <div class="stat"><label>Oracle</label><b id="stOracle">—</b></div>
 </section>
 
 <div class="branchbar">
@@ -128,14 +136,23 @@
   <!-- MARKET SIMULATOR + RISKY TROVES -->
   <div class="card wide">
     <h2>Market Simulator <span class="hint">testnet oracle control — crash the market, run liquidations</span></h2>
-    <div class="simrow">
-      <span><span class="collsym">ETH</span> price:</span> <b id="simPrice">—</b>
+    <div class="simrow" id="priceRow">
+      <span>ETH/USD:</span> <b id="simPrice">—</b>
       <button class="mini" data-bump="-10">−10%</button>
       <button class="mini" data-bump="-5">−5%</button>
       <button class="mini" data-bump="5">+5%</button>
       <button class="mini" data-bump="10">+10%</button>
       <input id="simInput" type="number" placeholder="custom $" style="width:110px" />
       <button class="mini" id="btnSetPrice">Set</button>
+      <span class="hint" id="simNote" style="display:none">live Chainlink feed — not settable</span>
+    </div>
+    <div class="simrow" id="depegRow" style="display:none">
+      <span>stETH/ETH rate:</span> <b id="simRate">—</b>
+      <button class="mini" data-rate="0.95">Depeg 0.95</button>
+      <button class="mini" data-rate="0.90">Depeg 0.90</button>
+      <button class="mini" data-rate="0.80">Depeg 0.80</button>
+      <button class="mini" data-rate="1">Restore peg</button>
+      <span class="hint">below 0.96 the circuit breaker trips</span>
     </div>
     <table id="trovesTable">
       <thead><tr><th>Owner</th><th>Collateral</th><th>Debt</th><th>ICR</th><th></th></tr></thead>
@@ -145,7 +162,7 @@
 </main>
 
 <div id="toast"></div>
-<footer>ORA Protocol MVP — Liquity-engine core, modern stack. Local testnet · chain 31337 · ETH + wstETH collateral branches. Not financial advice; demo keys are public.</footer>
+<footer>ORA Protocol MVP — Liquity-engine core, modern stack. ETH + wstETH collateral branches · Chainlink oracle adapters with depeg circuit breaker · local chain 31337 / Base Sepolia 84532. Not financial advice; demo keys are public.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
 <script src="app.js"></script>
