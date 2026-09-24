@@ -211,7 +211,7 @@ async function setNetwork(mode) {
       (t.style.display = dep.branches[t.dataset.branch] ? "" : "none"));
     if (!dep.branches[branch]) branch = Object.keys(dep.branches)[0];
 
-    if (local) setAccount($("accountSelect").value);
+    if (net.local) setAccount($("accountSelect").value);
     setBranch(dep.branches.ETH ? "ETH" : Object.keys(dep.branches)[0]);
     await refresh();
   } catch (e) {
