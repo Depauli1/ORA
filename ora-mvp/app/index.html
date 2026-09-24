@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORA Protocol — Interest-free borrowing, hard-pegged orUSD</title>
+<link rel="icon" href="logo.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="logo.png" alt="ORA" />
+    <div>
+      <h1>ORA <span class="badge">TESTNET</span></h1>
+      <p>Interest-free borrowing · hard-pegged <b>orUSD</b></p>
+    </div>
+  </div>
+  <div class="account">
+    <div style="display:flex; gap:8px">
+    <select id="networkSelect">
+      <option value="local">Local testnet</option>
+      <option value="baseSepolia">Base Sepolia</option>
+      <option value="base">Base (mainnet)</option>
+    </select>
+    <select id="walletSelect" style="display:none" title="choose which installed wallet to connect (EIP-6963)"></select>
+    <button id="btnConnect" style="display:none">Connect wallet</button>
+    <select id="accountSelect">
+      <option value="alice">Alice (demo)</option>
+      <option value="bob">Bob (demo)</option>
+      <option value="carol">Carol (liquidator)</option>
+    </select>
+    </div>
+    <div class="balances">
+      <span id="balEth">— ETH</span>
+      <span id="balOrusd" class="orusd">— orUSD</span>
+      <span id="balOra" class="ora">— ORA</span>
+      <span id="balWst" style="display:none">— wstETH</span>
+    </div>
+    <div class="addr" id="addr">—</div>
+  </div>
+</header>
+
+<section class="stats" id="stats">
+  <div class="stat"><label><span class="collsym">ETH</span> Price</label><b id="stEthPrice">—</b></div>
+  <div class="stat"><label>TCR</label><b id="stTcr">—</b></div>
+  <div class="stat"><label>Mode</label><b id="stMode">—</b></div>
+  <div class="stat"><label>orUSD Supply</label><b id="stSupply">—</b></div>
+  <div class="stat"><label>Troves</label><b id="stTroves">—</b></div>
+  <div class="stat"><label>Stability Pool</label><b id="stSp">—</b></div>
+  <div class="stat"><label id="stFeeLabel">Borrow Fee</label><b id="stFee">—</b></div>
+</section>
+
+<div class="branchbar">
+  <span class="hint">Collateral branch:</span>
+  <button class="tab active" id="tabETH" data-branch="ETH">ETH</button>
+  <button class="tab" id="tabWstETH" data-branch="wstETH">wstETH</button>
+  <button class="tab" id="tabTBILL" data-branch="tBILL">wmTBILL <span class="new">RWA</span></button>
+  <button class="tab" id="tabETHv2" data-branch="ETHv2">ETH <span class="new">v2 · rates</span></button>
+  <button class="mini" id="btnWstFaucet" style="display:none">Get test collateral</button>
+</div>
+
+<main>
+  <!-- TROVE -->
+  <div class="card" id="troveCard">
+    <h2>My Trove <span class="hint" id="troveHint">borrow orUSD against <b class="collsym">ETH</b> · 0% interest</span></h2>
+
+    <div id="troveNone">
+      <div class="row">
+        <div class="field">
+          <label>Collateral (<span class="collsym">ETH</span>)</label>
+          <input id="openColl" type="number" value="5" min="0" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Borrow (orUSD) <span class="hint">min 1,800</span></label>
+          <input id="openDebt" type="number" value="4000" min="1800" step="100" />
+        </div>
+        <div class="field" id="rateField" style="display:none">
+          <label>Interest (%/yr) <span class="hint">your choice</span></label>
+          <input id="openRate" type="number" value="5" min="0.5" max="100" step="0.1" />
+        </div>
+      </div>
+      <div class="preview" id="openPreview">—</div>
+      <button class="primary" id="btnOpen">Open Trove &amp; mint orUSD</button>
+    </div>
+
+    <div id="troveActive" style="display:none">
+      <div class="kv">
+        <div><label>Collateral</label><b id="tvColl">—</b></div>
+        <div><label>Debt</label><b id="tvDebt">—</b></div>
+        <div><label>Collateral Ratio</label><b id="tvIcr">—</b></div>
+        <div><label>Liquidation Price</label><b id="tvLiq">—</b></div>
+        <div id="rateKv" style="display:none"><label>My Interest Rate</label><b id="tvRate">—</b></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Amount</label><input id="adjAmount" type="number" value="1" min="0" step="0.1" /></div>
+      </div>
+      <div class="btnrow">
+        <button id="btnAddColl">Add <span class="collsym">ETH</span></button>
+        <button id="btnWithdrawColl">Withdraw <span class="collsym">ETH</span></button>
+        <button id="btnBorrowMore">Borrow orUSD</button>
+        <button id="btnRepay">Repay orUSD</button>
+      </div>
+      <div class="row" id="rateAdjustRow" style="display:none">
+        <div class="field"><label>New rate (%/yr) <span class="hint">7-day cooldown — higher rate = redemption protection</span></label>
+          <input id="newRate" type="number" value="5" min="0.5" max="100" step="0.1" /></div>
+      </div>
+      <button id="btnRate" style="display:none">Change interest rate</button>
+      <button class="danger" id="btnClose">Close Trove (repay all)</button>
+      <div class="hint" id="tvCloseHint" style="margin-top:6px"></div>
+    </div>
+  </div>
+
+  <!-- STABILITY POOL -->
+  <div class="card">
+    <h2>Stability Pool <span class="hint">earn liquidation <span class="collsym">ETH</span> + ORA rewards</span></h2>
+    <div class="kv">
+      <div><label>My Deposit</label><b id="spDeposit">—</b></div>
+      <div><label><span class="collsym">ETH</span> Gain</label><b id="spEthGain">—</b></div>
+      <div><label>ORA Reward</label><b id="spOraGain">—</b></div>
+      <div><label>Pool Share</label><b id="spShare">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="spAmount" type="number" value="1000" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnSpDeposit">Deposit</button>
+      <button id="btnSpWithdraw">Withdraw (claims gains)</button>
+    </div>
+  </div>
+
+  <!-- REDEEM (hard peg floor) -->
+  <div class="card">
+    <h2>Redeem orUSD <span class="hint">the $1 hard-peg floor — swap orUSD for $1 of <span class="collsym">ETH</span></span></h2>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="redeemAmount" type="number" value="100" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnRedeem">Redeem</button>
+    </div>
+    <div class="hint" style="margin-top:6px" id="redeemHint">Redeems against the lowest-collateral troves at face value, minus the
+      redemption fee (0.5% floor + rate). Disabled during the 14-day bootstrap period after launch.</div>
+  </div>
+
+  <!-- sorUSD SAVINGS (rates branch) -->
+  <div class="card" id="sorusdCard" style="display:none">
+    <h2>sorUSD Savings <span class="hint">deposit orUSD, earn the borrower interest stream</span></h2>
+    <div class="kv">
+      <div><label>Share Price</label><b id="svPrice">—</b></div>
+      <div><label>Vault TVL</label><b id="svTvl">—</b></div>
+      <div><label>My sorUSD</label><b id="svBal">—</b></div>
+      <div><label>Est. APY</label><b id="svApy">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="svAmount" type="number" value="1000" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnSvDeposit">Deposit</button>
+      <button id="btnSvWithdraw">Withdraw all</button>
+      <button id="btnSvRoute">Route interest (<span id="svPending">0</span> orUSD pending)</button>
+    </div>
+    <div class="hint" style="margin-top:6px">Borrowers on this branch pay their chosen rate continuously. Anyone can
+      route the accrued stream: 80% to sorUSD savers, 20% to the protocol treasury.</div>
+  </div>
+
+  <!-- LEVERAGE ZAPPER (rates branch) -->
+  <div class="card" id="leverCard" style="display:none">
+    <h2>Leverage <span class="hint">one-click leveraged ETH — borrow, swap &amp; redeposit in a single transaction</span></h2>
+    <div class="kv">
+      <div><label>My Position</label><b id="lvPos">—</b></div>
+      <div><label>Debt</label><b id="lvDebt">—</b></div>
+      <div><label>ICR</label><b id="lvIcr">—</b></div>
+      <div><label>AMM Price</label><b id="lvPool">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Deposit (ETH)</label><input id="lvColl" type="number" value="2" min="0" step="0.5" /></div>
+      <div class="field"><label>Target leverage</label><select id="lvLev">
+        <option value="3333">1.5×</option>
+        <option value="5000">2×</option>
+        <option value="6000" selected>2.5×</option>
+        <option value="6667">3×</option>
+      </select></div>
+      <div class="field"><label>Interest rate (%/yr)</label><input id="lvRate" type="number" value="5" min="0.5" max="100" step="0.5" /></div>
+      <div class="field"><label>Max slippage (%)</label><input id="lvSlip" type="number" value="20" min="0.1" max="99" step="0.5" title="caps the total equity lost to swap fees + price impact across the whole operation, measured at the oracle price; the demo AMM is shallow, so 20% is a sensible local default" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnLvOpen">Open leveraged position</button>
+      <button id="btnLvClose">Close &amp; unwind</button>
+    </div>
+    <div class="hint" style="margin-top:6px" id="lvPreview">Your personal Zap contract opens a trove at your chosen rate, then loops
+      borrow → swap orUSD→ETH on the demo AMM → re-deposit, up to the target leverage. Close unwinds everything — no flash
+      loans — and returns your ETH.</div>
+  </div>
+
+  <!-- ORA STAKING -->
+  <div class="card">
+    <h2>Stake ORA <span class="hint">earn 100% of this branch's fees</span></h2>
+    <div class="kv">
+      <div><label>My Stake</label><b id="stkAmount">—</b></div>
+      <div><label><span class="collsym">ETH</span> Fees Earned</label><b id="stkEth">—</b></div>
+      <div><label>orUSD Fees Earned</label><b id="stkOrusd">—</b></div>
+      <div id="faucetRow"><label>Faucet</label><button class="mini" id="btnFaucet">Get 100 test ORA</button></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>ORA amount</label><input id="stkInput" type="number" value="50" min="0" step="10" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnStake">Stake</button>
+      <button id="btnUnstake">Unstake (claims fees)</button>
+    </div>
+  </div>
+
+  <!-- MARKET SIMULATOR (testnet only) + RISKY TROVES -->
+  <div class="card wide">
+    <h2><span id="simTitle">Market Simulator</span> <span class="hint" id="simSub">testnet oracle control — crash the market, run liquidations</span></h2>
+    <div id="simTools">
+    <div class="simrow" id="priceRow">
+      <span>ETH/USD:</span> <b id="simPrice">—</b>
+      <button class="mini" data-bump="-10">−10%</button>
+      <button class="mini" data-bump="-5">−5%</button>
+      <button class="mini" data-bump="5">+5%</button>
+      <button class="mini" data-bump="10">+10%</button>
+      <input id="simInput" type="number" placeholder="custom $" style="width:110px" />
+      <button class="mini" id="btnSetPrice">Set</button>
+      <span class="hint" id="simNote" style="display:none">live Chainlink feed — not settable</span>
+    </div>
+    <div class="simrow" id="seqRow" style="display:none">
+      <span>L2 sequencer:</span> <b id="simSeq">—</b>
+      <button class="mini" data-seq="halt" title="simulate an OP-stack sequencer outage — oracles freeze to lastGoodPrice">Halt</button>
+      <button class="mini" data-seq="restart" title="sequencer back up — feeds stay untrusted for a 1h grace period">Restart</button>
+      <button class="mini" data-seq="grace" title="age the restart past the 1h grace period">Skip grace</button>
+      <span class="hint">outage ⇒ oracle down, lastGoodPrice served; restarts honor a 1h grace</span>
+    </div>
+    <div class="simrow" id="depegRow" style="display:none">
+      <span>stETH/ETH rate:</span> <b id="simRate">—</b>
+      <button class="mini" data-rate="0.95">Depeg 0.95</button>
+      <button class="mini" data-rate="0.90">Depeg 0.90</button>
+      <button class="mini" data-rate="0.80">Depeg 0.80</button>
+      <button class="mini" data-rate="1">Restore peg</button>
+      <span class="hint">below 0.96 the circuit breaker trips</span>
+    </div>
+    <div class="simrow" id="navRow" style="display:none">
+      <span>mTBILL NAV:</span> <b id="simNav">—</b>
+      <button class="mini" data-nav="1.004" title="a month of T-bill yield">Accrue +0.4%</button>
+      <button class="mini" data-nav="1.14" title="manipulated spike — the feed clamps to +2% per update">Spike +14%</button>
+      <button class="mini" data-nav="0.98" title="a −2% NAV print — drops thin troves into the [103%, 105%) soft-liquidation band">Dip −2%</button>
+      <button class="mini" data-nav="0.97" title="break the buck — trips the NAV shock breaker">Shock −3%</button>
+      <button class="mini" data-nav="reset">Reset $1.05</button>
+      <span class="hint">drops &gt;2% below the high-water mark flag a NAV shock</span>
+    </div>
+    </div><!-- /simTools -->
+    <table id="trovesTable">
+      <thead><tr><th>Owner</th><th>Collateral</th><th>Debt</th><th>ICR</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button class="mini" id="btnMoreTroves" style="display:none;margin-top:8px">Load 50 more troves</button>
+  </div>
+</main>
+
+<div id="toast"></div>
+<footer>ORA Protocol — Liquity-engine core. ETH + wstETH + wmTBILL (RWA yield-share, MCR 105%) + ETH v2 (user-set rates, one-click leverage) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
+
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="app.js?v=harden1"></script>
+</body>
+</html>

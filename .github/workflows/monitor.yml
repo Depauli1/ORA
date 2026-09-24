@@ -1,0 +1,61 @@
+# ORA invariant monitor — runs the read-only health watcher against the Base
+# Sepolia deployment. On any violated invariant the run fails and a GitHub
+# issue is opened (deduped by title).
+#
+# Triggers:
+#  - cron every 6h (NOTE: GitHub only schedules workflows from the DEFAULT
+#    branch — the cron activates once this lands on main via the PR)
+#  - push to ora-mvp/.monitor-trigger (on-demand runs from any branch)
+name: Invariant monitor
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    paths: ["ora-mvp/.monitor-trigger"]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - name: Watch invariants (Base Sepolia)
+        id: watch
+        env:
+          ORA_RPC_URL: ${{ vars.ORA_RPC_URL || 'https://sepolia.base.org' }}
+          ORA_DEPLOYMENT: app/deployment-baseSepolia.json
+        run: |
+          node scripts/watch-invariants.js | tee ../monitor-output.txt
+          echo "## Invariant monitor" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat ../monitor-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Open an alert issue on violation
+        if: failure()
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="[monitor] ORA invariant violation on Base Sepolia"
+          BODY=$(printf 'The invariant watcher failed on run %s:\n\n```\n%s\n```\n' \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            "$(tail -c 4000 monitor-output.txt 2>/dev/null || echo 'no output captured')")
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label bug || gh issue create --title "$TITLE" --body "$BODY"
+          fi
