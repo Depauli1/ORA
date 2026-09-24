@@ -35,6 +35,10 @@ jobs:
           cache-dependency-path: ora-mvp/package-lock.json
       - run: npm ci
       - run: npx hardhat compile
+      - name: Contract-size gate (fails over 22KB)
+        run: node scripts/check-sizes.js
+      - name: Gas snapshot check (fails on >10% regression)
+        run: GAS_CHECK=1 npx hardhat run scripts/gas-snapshot.js
       - name: Run test suite
         run: npx hardhat test
 

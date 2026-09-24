@@ -1,17 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/BaseMath.sol";
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/Ownable.sol";
-import "../Dependencies/CheckContract.sol";
-import "../Dependencies/console.sol";
-import "../Interfaces/ILQTYToken.sol";
-import "../Interfaces/ILQTYStaking.sol";
-import "../Dependencies/LiquityMath.sol";
-import "../Interfaces/ILUSDToken.sol";
-import "../Dependencies/IERC20.sol";
+import "../dependencies08/OraMath.sol";
+import "../dependencies08/OraOwnable.sol";
+import "../dependencies08/OraCheckContract.sol";
+import "../dependencies08/ILQTYStaking.sol";
+import "../dependencies08/IERC20.sol";
 
 /*
  * ORA Phase 2 — per-branch ORA staking / fee distribution.
@@ -20,51 +15,35 @@ import "../Dependencies/IERC20.sol";
  * pulled via transferFrom (LQTYToken.sendToLQTYStaking is bound to the
  * primary staking contract), and collateral gains are paid as ERC20.
  */
-contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
-    using SafeMath for uint;
-
+contract BranchStaking is ILQTYStaking, OraOwnable, OraCheckContract {
     // --- Data ---
     string constant public NAME = "BranchStaking";
 
     // ORA Phase 2: branch collateral token (e.g. wstETH)
     IERC20 public collToken;
 
-    mapping( address => uint) public stakes;
-    uint public totalLQTYStaked;
+    mapping( address => uint256) public stakes;
+    uint256 public totalLQTYStaked;
 
-    uint public F_ETH;  // Running sum of ETH fees per-LQTY-staked
-    uint public F_LUSD; // Running sum of LQTY fees per-LQTY-staked
+    uint256 public F_ETH;  // Running sum of ETH fees per-LQTY-staked
+    uint256 public F_LUSD; // Running sum of LQTY fees per-LQTY-staked
 
     // User snapshots of F_ETH and F_LUSD, taken at the point at which their latest deposit was made
-    mapping (address => Snapshot) public snapshots; 
+    mapping (address => Snapshot) public snapshots;
 
     struct Snapshot {
-        uint F_ETH_Snapshot;
-        uint F_LUSD_Snapshot;
+        uint256 F_ETH_Snapshot;
+        uint256 F_LUSD_Snapshot;
     }
-    
-    ILQTYToken public lqtyToken;
-    ILUSDToken public lusdToken;
+
+    IERC20 public lqtyToken;
+    IERC20 public lusdToken;
 
     address public troveManagerAddress;
     address public borrowerOperationsAddress;
     address public activePoolAddress;
 
-    // --- Events ---
-
-    event LQTYTokenAddressSet(address _lqtyTokenAddress);
-    event LUSDTokenAddressSet(address _lusdTokenAddress);
-    event TroveManagerAddressSet(address _troveManager);
-    event BorrowerOperationsAddressSet(address _borrowerOperationsAddress);
-    event ActivePoolAddressSet(address _activePoolAddress);
-
-    event StakeChanged(address indexed staker, uint newStake);
-    event StakingGainsWithdrawn(address indexed staker, uint LUSDGain, uint ETHGain);
-    event F_ETHUpdated(uint _F_ETH);
-    event F_LUSDUpdated(uint _F_LUSD);
-    event TotalLQTYStakedUpdated(uint _totalLQTYStaked);
-    event EtherSent(address _account, uint _amount);
-    event StakerSnapshotsUpdated(address _staker, uint _F_ETH, uint _F_LUSD);
+    // --- Events (inherited from ILQTYStaking) ---
 
     // --- Functions ---
 
@@ -78,13 +57,13 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
     (
         address _lqtyTokenAddress,
         address _lusdTokenAddress,
-        address _troveManagerAddress, 
+        address _troveManagerAddress,
         address _borrowerOperationsAddress,
         address _activePoolAddress
-    ) 
-        external 
-        onlyOwner 
-        override 
+    )
+        external
+        onlyOwner
+        override
     {
         checkContract(_lqtyTokenAddress);
         checkContract(_lusdTokenAddress);
@@ -92,8 +71,8 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         checkContract(_borrowerOperationsAddress);
         checkContract(_activePoolAddress);
 
-        lqtyToken = ILQTYToken(_lqtyTokenAddress);
-        lusdToken = ILUSDToken(_lusdTokenAddress);
+        lqtyToken = IERC20(_lqtyTokenAddress);
+        lusdToken = IERC20(_lusdTokenAddress);
         troveManagerAddress = _troveManagerAddress;
         borrowerOperationsAddress = _borrowerOperationsAddress;
         activePoolAddress = _activePoolAddress;
@@ -107,27 +86,27 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         _renounceOwnership();
     }
 
-    // If caller has a pre-existing stake, send any accumulated ETH and LUSD gains to them. 
-    function stake(uint _LQTYamount) external override {
+    // If caller has a pre-existing stake, send any accumulated ETH and LUSD gains to them.
+    function stake(uint256 _LQTYamount) external override {
         _requireNonZeroAmount(_LQTYamount);
 
-        uint currentStake = stakes[msg.sender];
+        uint256 currentStake = stakes[msg.sender];
 
-        uint ETHGain;
-        uint LUSDGain;
+        uint256 ETHGain;
+        uint256 LUSDGain;
         // Grab any accumulated ETH and LUSD gains from the current stake
         if (currentStake != 0) {
             ETHGain = _getPendingETHGain(msg.sender);
             LUSDGain = _getPendingLUSDGain(msg.sender);
         }
-    
+
        _updateUserSnapshots(msg.sender);
 
-        uint newStake = currentStake.add(_LQTYamount);
+        uint256 newStake = currentStake + _LQTYamount;
 
         // Increase user’s stake and total LQTY staked
         stakes[msg.sender] = newStake;
-        totalLQTYStaked = totalLQTYStaked.add(_LQTYamount);
+        totalLQTYStaked = totalLQTYStaked + _LQTYamount;
         emit TotalLQTYStakedUpdated(totalLQTYStaked);
 
         // Transfer LQTY from caller to this contract
@@ -143,26 +122,26 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         }
     }
 
-    // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains. 
+    // Unstake the LQTY and send the it back to the caller, along with their accumulated LUSD & ETH gains.
     // If requested amount > stake, send their entire stake.
-    function unstake(uint _LQTYamount) external override {
-        uint currentStake = stakes[msg.sender];
+    function unstake(uint256 _LQTYamount) external override {
+        uint256 currentStake = stakes[msg.sender];
         _requireUserHasStake(currentStake);
 
         // Grab any accumulated ETH and LUSD gains from the current stake
-        uint ETHGain = _getPendingETHGain(msg.sender);
-        uint LUSDGain = _getPendingLUSDGain(msg.sender);
-        
+        uint256 ETHGain = _getPendingETHGain(msg.sender);
+        uint256 LUSDGain = _getPendingLUSDGain(msg.sender);
+
         _updateUserSnapshots(msg.sender);
 
         if (_LQTYamount > 0) {
-            uint LQTYToWithdraw = LiquityMath._min(_LQTYamount, currentStake);
+            uint256 LQTYToWithdraw = OraMath._min(_LQTYamount, currentStake);
 
-            uint newStake = currentStake.sub(LQTYToWithdraw);
+            uint256 newStake = currentStake - LQTYToWithdraw;
 
             // Decrease user's stake and total LQTY staked
             stakes[msg.sender] = newStake;
-            totalLQTYStaked = totalLQTYStaked.sub(LQTYToWithdraw);
+            totalLQTYStaked = totalLQTYStaked - LQTYToWithdraw;
             emit TotalLQTYStakedUpdated(totalLQTYStaked);
 
             // Transfer unstaked LQTY to user
@@ -180,45 +159,45 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
 
     // --- Reward-per-unit-staked increase functions. Called by Liquity core contracts ---
 
-    function increaseF_ETH(uint _ETHFee) external override {
+    function increaseF_ETH(uint256 _ETHFee) external override {
         _requireCallerIsTroveManager();
-        uint ETHFeePerLQTYStaked;
-     
-        if (totalLQTYStaked > 0) {ETHFeePerLQTYStaked = _ETHFee.mul(DECIMAL_PRECISION).div(totalLQTYStaked);}
+        uint256 ETHFeePerLQTYStaked;
 
-        F_ETH = F_ETH.add(ETHFeePerLQTYStaked); 
+        if (totalLQTYStaked > 0) {ETHFeePerLQTYStaked = _ETHFee * OraMath.DECIMAL_PRECISION / totalLQTYStaked;}
+
+        F_ETH = F_ETH + ETHFeePerLQTYStaked;
         emit F_ETHUpdated(F_ETH);
     }
 
-    function increaseF_LUSD(uint _LUSDFee) external override {
+    function increaseF_LUSD(uint256 _LUSDFee) external override {
         _requireCallerIsBorrowerOperations();
-        uint LUSDFeePerLQTYStaked;
-        
-        if (totalLQTYStaked > 0) {LUSDFeePerLQTYStaked = _LUSDFee.mul(DECIMAL_PRECISION).div(totalLQTYStaked);}
-        
-        F_LUSD = F_LUSD.add(LUSDFeePerLQTYStaked);
+        uint256 LUSDFeePerLQTYStaked;
+
+        if (totalLQTYStaked > 0) {LUSDFeePerLQTYStaked = _LUSDFee * OraMath.DECIMAL_PRECISION / totalLQTYStaked;}
+
+        F_LUSD = F_LUSD + LUSDFeePerLQTYStaked;
         emit F_LUSDUpdated(F_LUSD);
     }
 
     // --- Pending reward functions ---
 
-    function getPendingETHGain(address _user) external view override returns (uint) {
+    function getPendingETHGain(address _user) external view override returns (uint256) {
         return _getPendingETHGain(_user);
     }
 
-    function _getPendingETHGain(address _user) internal view returns (uint) {
-        uint F_ETH_Snapshot = snapshots[_user].F_ETH_Snapshot;
-        uint ETHGain = stakes[_user].mul(F_ETH.sub(F_ETH_Snapshot)).div(DECIMAL_PRECISION);
+    function _getPendingETHGain(address _user) internal view returns (uint256) {
+        uint256 F_ETH_Snapshot = snapshots[_user].F_ETH_Snapshot;
+        uint256 ETHGain = stakes[_user] * (F_ETH - F_ETH_Snapshot) / OraMath.DECIMAL_PRECISION;
         return ETHGain;
     }
 
-    function getPendingLUSDGain(address _user) external view override returns (uint) {
+    function getPendingLUSDGain(address _user) external view returns (uint256) {
         return _getPendingLUSDGain(_user);
     }
 
-    function _getPendingLUSDGain(address _user) internal view returns (uint) {
-        uint F_LUSD_Snapshot = snapshots[_user].F_LUSD_Snapshot;
-        uint LUSDGain = stakes[_user].mul(F_LUSD.sub(F_LUSD_Snapshot)).div(DECIMAL_PRECISION);
+    function _getPendingLUSDGain(address _user) internal view returns (uint256) {
+        uint256 F_LUSD_Snapshot = snapshots[_user].F_LUSD_Snapshot;
+        uint256 LUSDGain = stakes[_user] * (F_LUSD - F_LUSD_Snapshot) / OraMath.DECIMAL_PRECISION;
         return LUSDGain;
     }
 
@@ -230,7 +209,7 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         emit StakerSnapshotsUpdated(_user, F_ETH, F_LUSD);
     }
 
-    function _sendETHGainToUser(uint ETHGain) internal {
+    function _sendETHGainToUser(uint256 ETHGain) internal {
         emit EtherSent(msg.sender, ETHGain);
         if (ETHGain > 0) {
             require(collToken.transfer(msg.sender, ETHGain), "BranchStaking: sending collateral gain failed");
@@ -251,11 +230,11 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         require(msg.sender == activePoolAddress, "LQTYStaking: caller is not ActivePool");
     }
 
-    function _requireUserHasStake(uint currentStake) internal pure {  
-        require(currentStake > 0, 'LQTYStaking: User must have a non-zero stake');  
+    function _requireUserHasStake(uint256 currentStake) internal pure {
+        require(currentStake > 0, 'LQTYStaking: User must have a non-zero stake');
     }
 
-    function _requireNonZeroAmount(uint _amount) internal pure {
+    function _requireNonZeroAmount(uint256 _amount) internal pure {
         require(_amount > 0, 'LQTYStaking: Amount must be non-zero');
     }
 

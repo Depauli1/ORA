@@ -22,19 +22,31 @@ subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {
       longVersion: "0.6.11+commit.5ef660b1"
     };
   }
+  if (args.solcVersion === "0.8.24") {
+    // New ORA contracts (Tier 3 + guardian + libraries) build on solc 0.8.24.
+    const compilerPath = path.join(
+      path.dirname(require.resolve("solc-0.8/package.json")),
+      "soljson.js"
+    );
+    return {
+      compilerPath,
+      isSolcJs: true,
+      version: "0.8.24",
+      longVersion: "0.8.24+commit.e11b9ed9"
+    };
+  }
   return runSuper(args);
 });
 
 // Deployer key for public testnets, in priority order:
-//   1. ORA_DEPLOYER_KEY env var (e.g. a GitHub Actions secret)
+//   1. ORA_DEPLOYER_KEY env var (in CI: the DEPLOYER_KEY Actions secret)
 //   2. ora-mvp/.secret (gitignored, local use — generate with scripts/gen-deployer.js)
-//   3. ora-mvp/.testnet-deployer.key (COMMITTED — throwaway key that only ever
-//      holds faucet testnet ETH, so CI can deploy without repo-secret access)
-// NEVER use any of these keys on mainnet or with real funds.
+// There is intentionally NO committed fallback key: any key that ever touched
+// git history must be treated as public. NEVER use these keys with real funds.
 const fs = require("fs");
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  for (const f of [".secret", ".testnet-deployer.key"]) {
+  for (const f of [".secret"]) {
     const p = path.join(__dirname, f);
     if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
   }
@@ -48,6 +60,14 @@ module.exports = {
       version: "0.6.11",
       settings: {
         optimizer: { enabled: true, runs: 100 }
+      }
+    },
+    {
+      // New ORA contracts (Tier 3 + guardian + libraries). Small sources, so
+      // a high runs count buys cheap calls without size pressure.
+      version: "0.8.24",
+      settings: {
+        optimizer: { enabled: true, runs: 1000 }
       }
     }],
     overrides: {

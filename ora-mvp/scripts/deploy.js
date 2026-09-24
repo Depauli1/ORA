@@ -183,6 +183,22 @@ async function main() {
     await a(communityIssuance), await a(oraStaking), await a(lockupFactory),
     treasury.address, treasury.address, deployer.address);
 
+  // ---------------- Emergency brake: borrowing-pause guardian ----------------
+  // One guardian for all branches; ORA_GUARDIAN should be a Safe multisig on
+  // production (defaults to the deployer for dev/testnet deploys).
+  console.log("\n\u2014 Guardian (borrowing-pause) \u2014");
+  const guardianHolder = process.env.ORA_GUARDIAN || deployer.address;
+  const guardian = await deploy("OraGuardian", guardianHolder);
+  if (!process.env.ORA_GUARDIAN && network.name !== "localhost" && network.name !== "hardhat") {
+    console.log("  WARNING: ORA_GUARDIAN unset \u2014 guardian = deployer EOA. Set a Safe multisig for production.");
+  }
+
+  // ---------------- Keeper helper: external batch liquidations ----------------
+  // The TM forks implement single-trove liquidation only (24KB ceiling);
+  // sequencing lives here. One stateless deployment serves all branches.
+  console.log("\n\u2014 BatchLiquidator \u2014");
+  const batchLiquidator = await deploy("BatchLiquidator");
+
   // ---------------- Branch 1 wiring ----------------
   console.log("\n— Wiring branch 1 (ETH) —");
   await (await sortedTroves.setParams(maxBytes32, await a(troveManager), await a(borrowerOperations))).wait();
@@ -191,6 +207,8 @@ async function main() {
     await a(stabilityPool), await a(gasPool), await a(collSurplusPool),
     await a(priceFeed), await a(orUSD), await a(sortedTroves),
     await a(oraToken), await a(oraStaking))).wait();
+  // setGuardian must precede setAddresses (which renounces ownership)
+  await (await borrowerOperations.setGuardian(await a(guardian))).wait();
   await (await borrowerOperations.setAddresses(
     await a(troveManager), await a(activePool), await a(defaultPool),
     await a(stabilityPool), await a(gasPool), await a(collSurplusPool),
@@ -240,6 +258,8 @@ async function main() {
 
   // setCollToken must precede setAddresses (which renounces ownership)
   await (await borrowerOperations2.setCollToken(await a(wstETH))).wait();
+  // setGuardian must precede setAddresses (which renounces ownership)
+  await (await borrowerOperations2.setGuardian(await a(guardian))).wait();
   await (await borrowerOperations2.setAddresses(
     await a(troveManager2), await a(activePool2), await a(defaultPool2),
     await a(stabilityPool2), await a(gasPool2), await a(collSurplusPool2),
@@ -308,6 +328,8 @@ async function main() {
   // more than RWA_DEBT_CAP orUSD regardless of what happens to the RWA.
   await (await borrowerOperations3.setCollToken(await a(wtBill))).wait();
   await (await borrowerOperations3.setDebtCap(ethers.parseEther(RWA_DEBT_CAP))).wait();
+  // setGuardian must precede setAddresses (which renounces ownership)
+  await (await borrowerOperations3.setGuardian(await a(guardian))).wait();
   await (await borrowerOperations3.setAddresses(
     await a(troveManager3), await a(activePool3), await a(defaultPool3),
     await a(stabilityPool3), await a(gasPool3), await a(collSurplusPool3),
@@ -371,6 +393,8 @@ async function main() {
     await a(stabilityPool4), await a(gasPool4), await a(collSurplusPool4),
     await a(priceFeed), await a(orUSD), await a(sortedTroves4),
     await a(oraToken), await a(oraStaking))).wait();
+  // setGuardian must precede setAddresses (which renounces ownership)
+  await (await borrowerOperations4.setGuardian(await a(guardian))).wait();
   await (await borrowerOperations4.setAddresses(
     await a(troveManager4), await a(activePool4), await a(defaultPool4),
     await a(stabilityPool4), await a(gasPool4), await a(collSurplusPool4),
@@ -424,7 +448,9 @@ async function main() {
       `contracts/rwa/${name}.sol/${name}.json`,
       `contracts/rwa/WTBill.sol/${name}.json`,
       `contracts/zap/${name}.sol/${name}.json`,
-      `contracts/zap/LeverZap.sol/${name}.json`
+      `contracts/zap/LeverZap.sol/${name}.json`,
+      `contracts/guardian/${name}.sol/${name}.json`,
+      `contracts/keeper/${name}.sol/${name}.json`
     ];
     for (const h of hits) {
       const p = path.join(__dirname, "..", "artifacts", h);
@@ -445,7 +471,10 @@ async function main() {
       oraToken: await a(oraToken),
       oraStaking: await a(oraStaking),
       communityIssuance: await a(communityIssuance),
-      lockupFactory: await a(lockupFactory)
+      lockupFactory: await a(lockupFactory),
+      guardian: await a(guardian),
+      guardianHolder,
+      batchLiquidator: await a(batchLiquidator)
     },
     branches: {
       ETH: {
@@ -576,7 +605,9 @@ async function main() {
       wtBillPriceFeed: abi("WTBillPriceFeed"),
       oraSwapPool: abi("OraSwapPool"),
       leverZap: abi("LeverZap"),
-      leverZapFactory: abi("LeverZapFactory")
+      leverZapFactory: abi("LeverZapFactory"),
+      guardian: abi("OraGuardian"),
+      batchLiquidator: abi("BatchLiquidator")
     }
   };
 

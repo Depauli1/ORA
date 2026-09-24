@@ -21,10 +21,21 @@ fund deployer ──> touch ora-mvp/.deploy-testnet-trigger ──> push
 
 ## 1. Fund the deployer (the only manual step)
 
-The pipeline deploys from a throwaway, testnet-only key committed at
-`ora-mvp/.testnet-deployer.key` (it never holds anything but faucet ETH).
+The pipeline deploys from a throwaway, testnet-only key that lives ONLY in
+CI secrets — never in the repo. Set it once as repo owner:
 
-**Deployer address: `0xbC8aFFCE0B146B9e82fa7D8C7d0d40D1443Cd131`**
+1. Generate a fresh key locally: `node ora-mvp/scripts/gen-deployer.js`
+   (prints the address; or run `node -e "console.log(new (require('ethers').Wallet)(require('fs').readFileSync('ora-mvp/.secret','utf8').trim()).address)"` to re-derive it).
+2. Add it as an Actions secret named `DEPLOYER_KEY`
+   (Settings → Secrets and variables → Actions → New repository secret).
+3. Fund the printed address from a Base Sepolia faucet below.
+
+> Rotation note: an earlier revision of this repo committed a throwaway
+> testnet key (`.testnet-deployer.key`, deployer
+> `0xbC8aFFCE0B146B9e82fa7D8C7d0d40D1443Cd131`). Anything that ever touched
+> git history must be treated as public, so that key is ABANDONED — do not
+> fund or reuse it. History cannot be unwound, but the pipeline no longer
+> reads any committed key.
 
 Free Base Sepolia faucets (no mainnet balance required):
 - https://portal.cdp.coinbase.com/products/faucet (Coinbase — pick "Base Sepolia")
@@ -42,9 +53,8 @@ well under 0.01 ETH):
 `seed-public.js` is adaptive and idempotent — fund a little now, re-trigger
 later with more, and it fills in whatever is missing.
 
-> Optional hardening: as repo owner you can add an Actions secret named
-> `DEPLOYER_KEY` (Settings → Secrets and variables → Actions) with your own
-> key; the workflow prefers it over the committed file.
+> Local deploys use the same flow: `ORA_DEPLOYER_KEY=…` env var or the
+> gitignored `ora-mvp/.secret` file. Never commit either.
 
 ## 2. Trigger the deploy
 

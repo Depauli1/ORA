@@ -3,3 +3,4 @@ artifacts/
 cache/
 bin/
 .secret
+.testnet-deployer.key

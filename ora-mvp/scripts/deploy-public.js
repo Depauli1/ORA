@@ -13,7 +13,7 @@ const { ethers } = hre;
 
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  for (const f of [".secret", ".testnet-deployer.key"]) {
+  for (const f of [".secret"]) {
     const p = path.join(__dirname, "..", f);
     if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
   }

@@ -10,6 +10,7 @@ import "../Interfaces/ILUSDToken.sol";
 import "../Interfaces/ICollSurplusPool.sol";
 import "../Interfaces/ISortedTroves.sol";
 import "../Interfaces/ILQTYStaking.sol";
+import "../Interfaces/IOraGuardian.sol";
 import "./LiquityBaseRWA.sol";
 import "../Dependencies/Ownable.sol";
 import "../Dependencies/CheckContract.sol";
@@ -37,6 +38,11 @@ contract BorrowerOperationsRWA is LiquityBaseRWA, Ownable, CheckContract, IBorro
 
     ILQTYStaking public lqtyStaking;
     address public lqtyStakingAddress;
+
+    // --- ORA guardian: per-branch borrowing pause (emergency brake) ---
+    // address(0) = no guardian wired (pausing disabled). Set once, before
+    // setAddresses() renounces ownership.
+    IOraGuardian public guardian;
 
     ILUSDToken public lusdToken;
 
@@ -103,6 +109,23 @@ contract BorrowerOperationsRWA is LiquityBaseRWA, Ownable, CheckContract, IBorro
     event LUSDBorrowingFeePaid(address indexed _borrower, uint _LUSDFee);
     
     // --- Dependency setters ---
+
+    // One-shot guardian wiring. checkContract: a garbage address would
+    // fail-closed and brick borrowing, so fat fingers must revert here.
+    function setGuardian(address _guardian) external onlyOwner {
+        require(address(guardian) == address(0), "BorrowerOperations: guardian already set");
+        checkContract(_guardian);
+        guardian = IOraGuardian(_guardian);
+    }
+
+    // Fail-open when unwired (testnets); otherwise defers to the guardian.
+    function _borrowingPaused() internal view returns (bool) {
+        return address(guardian) != address(0) && guardian.isBorrowingPaused(address(this));
+    }
+
+    function _requireBorrowingNotPaused() internal view {
+        require(!_borrowingPaused(), "BorrowerOperations: borrowing is paused");
+    }
 
     function setAddresses(
         address _troveManagerAddress,
@@ -182,6 +205,7 @@ contract BorrowerOperationsRWA is LiquityBaseRWA, Ownable, CheckContract, IBorro
     // --- Borrower Trove Operations ---
 
     function openTrove(uint _maxFeePercentage, uint _LUSDAmount, uint _collAmount, address _upperHint, address _lowerHint) external override {
+        _requireBorrowingNotPaused(); // first: fail before pulling user collateral
         _pullCollateral(msg.sender, _collAmount);
         ContractsCache memory contractsCache = ContractsCache(troveManager, activePool, lusdToken);
         LocalVariables_openTrove memory vars;
@@ -258,6 +282,7 @@ contract BorrowerOperationsRWA is LiquityBaseRWA, Ownable, CheckContract, IBorro
 
     // Withdraw LUSD tokens from a trove: mint new LUSD tokens to the owner, and increase the trove's debt accordingly
     function withdrawLUSD(uint _maxFeePercentage, uint _LUSDAmount, address _upperHint, address _lowerHint) external override {
+        _requireBorrowingNotPaused();
         _adjustTrove(msg.sender, 0, 0, _LUSDAmount, true, _upperHint, _lowerHint, _maxFeePercentage);
     }
 
@@ -267,6 +292,9 @@ contract BorrowerOperationsRWA is LiquityBaseRWA, Ownable, CheckContract, IBorro
     }
 
     function adjustTrove(uint _maxFeePercentage, uint _collDeposit, uint _collWithdrawal, uint _LUSDChange, bool _isDebtIncrease, address _upperHint, address _lowerHint) external override {
+        // Debt increases halt while paused (checked before pulling collateral);
+        // repays, collateral moves and closes always go through.
+        if (_isDebtIncrease && _LUSDChange > 0) { _requireBorrowingNotPaused(); }
         _pullCollateral(msg.sender, _collDeposit);
         _adjustTrove(msg.sender, _collDeposit, _collWithdrawal, _LUSDChange, _isDebtIncrease, _upperHint, _lowerHint, _maxFeePercentage);
     }

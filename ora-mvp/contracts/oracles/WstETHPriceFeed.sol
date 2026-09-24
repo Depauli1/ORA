@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Interfaces/IPriceFeed.sol";
-import "../Dependencies/AggregatorV3Interface.sol";
-import "../Dependencies/CheckContract.sol";
+import "../dependencies08/IPriceFeed.sol";
+import "../dependencies08/AggregatorV3Interface.sol";
+import "../dependencies08/OraCheckContract.sol";
 import "./ChainlinkFeedReader.sol";
 import "./SequencerGuard.sol";
 
@@ -29,8 +29,7 @@ interface IWstETHRate {
  * If any feed is broken/stale the adapter falls back to lastGoodPrice and
  * flags the oracle as down.
  */
-contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, IPriceFeed {
-    using SafeMath for uint256;
+contract WstETHPriceFeed is OraCheckContract, ChainlinkFeedReader, SequencerGuard, IPriceFeed {
 
     string constant public NAME = "WstETHPriceFeed";
 
@@ -41,29 +40,29 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
     uint8 public immutable stEthEthDecimals;
     // Per-feed heartbeats: ETH/USD updates far more often than stETH/ETH, so
     // each feed gets its own staleness window (Chainlink heartbeat + margin).
-    uint public immutable ethUsdTimeout;
-    uint public immutable stEthEthTimeout;
-    uint public immutable maxDeviationBps; // max single-fetch move vs lastGoodPrice
+    uint256 public immutable ethUsdTimeout;
+    uint256 public immutable stEthEthTimeout;
+    uint256 public immutable maxDeviationBps; // max single-fetch move vs lastGoodPrice
 
-    uint constant public DEPEG_THRESHOLD = 96e16;  // stETH/ETH < 0.96 trips the breaker
-    uint constant public RATE_CAP = 1e18;          // stETH never priced above ETH
+    uint256 constant public DEPEG_THRESHOLD = 96e16;  // stETH/ETH < 0.96 trips the breaker
+    uint256 constant public RATE_CAP = 1e18;          // stETH never priced above ETH
 
-    uint public lastGoodPrice;
+    uint256 public lastGoodPrice;
     bool public oracleLive;
     bool public depegged;
 
     event OracleStatusChanged(bool _live);
-    event DepegCircuitBreaker(bool _active, uint _stEthEthRate);
+    event DepegCircuitBreaker(bool _active, uint256 _stEthEthRate);
 
     constructor(
         address _ethUsdAggregator,
         address _stEthEthAggregator,
         address _wstETH,
-        uint _ethUsdTimeout,
-        uint _stEthEthTimeout,
+        uint256 _ethUsdTimeout,
+        uint256 _stEthEthTimeout,
         address _sequencerUptimeFeed,
-        uint _maxDeviationBps
-    ) public SequencerGuard(_sequencerUptimeFeed) {
+        uint256 _maxDeviationBps
+    ) SequencerGuard(_sequencerUptimeFeed) {
         require(_maxDeviationBps > 0 && _maxDeviationBps <= 10000, "WstETHPriceFeed: bad deviation");
         maxDeviationBps = _maxDeviationBps;
         checkContract(_ethUsdAggregator);
@@ -85,7 +84,7 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         ethUsdTimeout = _ethUsdTimeout;
         stEthEthTimeout = _stEthEthTimeout;
 
-        (uint price, bool ok, ) = _currentPrice(ethAgg, rateAgg, ethDec, rateDec, IWstETHRate(_wstETH), _ethUsdTimeout, _stEthEthTimeout);
+        (uint256 price, bool ok, ) = _currentPrice(ethAgg, rateAgg, ethDec, rateDec, IWstETHRate(_wstETH), _ethUsdTimeout, _stEthEthTimeout);
         require(ok, "WstETHPriceFeed: initial feed response invalid");
         require(_sequencerUpAt(_sequencerUptimeFeed), "WstETHPriceFeed: sequencer down at deploy");
         lastGoodPrice = price;
@@ -98,15 +97,15 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         uint8 _ethDec,
         uint8 _rateDec,
         IWstETHRate _wst,
-        uint _ethUsdTimeout,
-        uint _stEthEthTimeout
+        uint256 _ethUsdTimeout,
+        uint256 _stEthEthTimeout
     )
         internal
         view
-        returns (uint price, bool ok, bool depeg)
+        returns (uint256 price, bool ok, bool depeg)
     {
-        (uint ethUsd, bool okEth) = _readFeed(_ethAgg, _ethDec, _ethUsdTimeout);
-        (uint rate, bool okRate) = _readFeed(_rateAgg, _rateDec, _stEthEthTimeout);
+        (uint256 ethUsd, bool okEth) = _readFeed(_ethAgg, _ethDec, _ethUsdTimeout);
+        (uint256 rate, bool okRate) = _readFeed(_rateAgg, _rateDec, _stEthEthTimeout);
         if (!okEth || !okRate) { return (0, false, false); }
 
         depeg = rate < DEPEG_THRESHOLD;
@@ -114,7 +113,7 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
 
         try _wst.stEthPerToken() returns (uint256 perToken) {
             if (perToken == 0) { return (0, false, depeg); }
-            price = ethUsd.mul(rate).div(1e18).mul(perToken).div(1e18);
+            price = ethUsd * rate / 1e18 * perToken / 1e18;
             return (price, true, depeg);
         } catch {
             return (0, false, depeg);
@@ -122,35 +121,35 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
     }
 
     // View variant for frontends.
-    function getPrice() external view returns (uint) {
+    function getPrice() external view returns (uint256) {
         if (!_sequencerUp()) { return lastGoodPrice; }
-        (uint price, bool ok, ) = _currentPrice(
+        (uint256 price, bool ok, ) = _currentPrice(
             ethUsdAggregator, stEthEthAggregator, ethUsdDecimals, stEthEthDecimals, wstETH, ethUsdTimeout, stEthEthTimeout);
         if (ok) {
-            uint diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
+            uint256 diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
             if (diff * 10000 > lastGoodPrice * maxDeviationBps) { ok = false; }
         }
         return ok ? price : lastGoodPrice;
     }
 
     // Current stETH/ETH market rate (uncapped) + feed health, for monitoring/UI.
-    function getStEthEthRate() external view returns (uint rate, bool ok) {
+    function getStEthEthRate() external view returns (uint256 rate, bool ok) {
         return _readFeed(stEthEthAggregator, stEthEthDecimals, stEthEthTimeout);
     }
 
-    function fetchPrice() external override returns (uint) {
+    function fetchPrice() external override returns (uint256) {
         if (!_sequencerUp()) {
             if (oracleLive) { oracleLive = false; emit OracleStatusChanged(false); }
             return lastGoodPrice;
         }
-        (uint price, bool ok, bool depeg) = _currentPrice(
+        (uint256 price, bool ok, bool depeg) = _currentPrice(
             ethUsdAggregator, stEthEthAggregator, ethUsdDecimals, stEthEthDecimals, wstETH, ethUsdTimeout, stEthEthTimeout);
 
         // Deviation guard: a composite move beyond maxDeviationBps in a single
         // fetch is treated as a broken input (no secondary composite source to
         // confirm) — serve lastGoodPrice, flag the oracle down.
         if (ok) {
-            uint diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
+            uint256 diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
             if (diff * 10000 > lastGoodPrice * maxDeviationBps) { ok = false; }
         }
 
@@ -162,7 +161,7 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         if (!oracleLive) { oracleLive = true; emit OracleStatusChanged(true); }
         if (depeg != depegged) {
             depegged = depeg;
-            (uint rawRate, ) = _readFeed(stEthEthAggregator, stEthEthDecimals, stEthEthTimeout);
+            (uint256 rawRate, ) = _readFeed(stEthEthAggregator, stEthEthDecimals, stEthEthTimeout);
             emit DepegCircuitBreaker(depeg, rawRate);
         }
 

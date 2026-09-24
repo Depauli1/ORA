@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
-
-import "../Dependencies/SafeMath.sol";
+pragma solidity 0.8.24;
 
 /*
  * ORA Phase 1 — mock wstETH for testnets without a canonical Lido deployment.
  * Public faucet (capped per call) so anyone can try the wstETH branch.
  */
 contract MockWstETH {
-    using SafeMath for uint256;
-
     string public constant name = "Wrapped liquid staked Ether 2.0 (ORA Mock)";
     string public constant symbol = "wstETH";
     uint8 public constant decimals = 18;
@@ -19,7 +15,7 @@ contract MockWstETH {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    uint public constant FAUCET_CAP = 1000e18;
+    uint256 public constant FAUCET_CAP = 1000e18;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
@@ -31,8 +27,8 @@ contract MockWstETH {
 
     function faucet(uint256 _amount) external {
         require(_amount <= FAUCET_CAP, "MockWstETH: faucet cap is 1000 per call");
-        totalSupply = totalSupply.add(_amount);
-        balanceOf[msg.sender] = balanceOf[msg.sender].add(_amount);
+        totalSupply = totalSupply + _amount;
+        balanceOf[msg.sender] = balanceOf[msg.sender] + _amount;
         emit Transfer(address(0), msg.sender, _amount);
     }
 
@@ -42,7 +38,7 @@ contract MockWstETH {
     }
 
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool) {
-        allowance[_from][msg.sender] = allowance[_from][msg.sender].sub(_value, "MockWstETH: transfer amount exceeds allowance");
+        allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
         _transfer(_from, _to, _value);
         return true;
     }
@@ -55,8 +51,8 @@ contract MockWstETH {
 
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(_to != address(0), "MockWstETH: transfer to zero address");
-        balanceOf[_from] = balanceOf[_from].sub(_value, "MockWstETH: transfer amount exceeds balance");
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(_from, _to, _value);
     }
 }

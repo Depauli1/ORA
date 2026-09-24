@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/IERC20.sol";
+import "../dependencies08/IERC20.sol";
 
 /*
  * ORA demo AMM — a minimal orUSD/ETH constant-product pool (0.3% fee).
@@ -14,8 +13,6 @@ import "../Dependencies/IERC20.sol";
  * seeded once at deploy time and is not withdrawable (no LP shares).
  */
 contract OraSwapPool {
-    using SafeMath for uint256;
-
     uint256 public constant FEE_BPS = 30; // 0.3%
 
     IERC20 public immutable orUSD;
@@ -25,7 +22,7 @@ contract OraSwapPool {
     event LiquidityAdded(address indexed from, uint256 orUSDAmount, uint256 ethAmount);
     event Swap(address indexed trader, bool ethIn, uint256 amountIn, uint256 amountOut);
 
-    constructor(address _orUSD) public {
+    constructor(address _orUSD) {
         require(_orUSD != address(0), "OraSwapPool: zero address");
         orUSD = IERC20(_orUSD);
     }
@@ -37,26 +34,26 @@ contract OraSwapPool {
     function addLiquidity(uint256 _orUSDAmount) external payable {
         require(_orUSDAmount > 0 && msg.value > 0, "OraSwapPool: zero amounts");
         require(orUSD.transferFrom(msg.sender, address(this), _orUSDAmount), "OraSwapPool: transfer failed");
-        reserveOrUSD = reserveOrUSD.add(_orUSDAmount);
-        reserveETH = reserveETH.add(msg.value);
+        reserveOrUSD = reserveOrUSD + _orUSDAmount;
+        reserveETH = reserveETH + msg.value;
         emit LiquidityAdded(msg.sender, _orUSDAmount, msg.value);
     }
 
     // --- Views ---
 
     function getETHOut(uint256 _orUSDIn) public view returns (uint256) {
-        uint256 inWithFee = _orUSDIn.mul(10000 - FEE_BPS);
-        return inWithFee.mul(reserveETH).div(reserveOrUSD.mul(10000).add(inWithFee));
+        uint256 inWithFee = _orUSDIn * (10000 - FEE_BPS);
+        return inWithFee * reserveETH / (reserveOrUSD * 10000 + inWithFee);
     }
 
     function getOrUSDOut(uint256 _ethIn) public view returns (uint256) {
-        uint256 inWithFee = _ethIn.mul(10000 - FEE_BPS);
-        return inWithFee.mul(reserveOrUSD).div(reserveETH.mul(10000).add(inWithFee));
+        uint256 inWithFee = _ethIn * (10000 - FEE_BPS);
+        return inWithFee * reserveOrUSD / (reserveETH * 10000 + inWithFee);
     }
 
     // orUSD per ETH, 1e18-scaled
     function spotPrice() external view returns (uint256) {
-        return reserveOrUSD.mul(1e18).div(reserveETH);
+        return reserveOrUSD * 1e18 / reserveETH;
     }
 
     // --- Swaps ---
@@ -65,8 +62,8 @@ contract OraSwapPool {
         ethOut = getETHOut(_orUSDIn);
         require(ethOut >= _minETHOut, "OraSwapPool: slippage");
         require(orUSD.transferFrom(msg.sender, address(this), _orUSDIn), "OraSwapPool: transfer failed");
-        reserveOrUSD = reserveOrUSD.add(_orUSDIn);
-        reserveETH = reserveETH.sub(ethOut);
+        reserveOrUSD = reserveOrUSD + _orUSDIn;
+        reserveETH = reserveETH - ethOut;
         // Paying the swap output to the swapper IS the product; reserves are
         // updated first (checks-effects-interactions).
         // slither-disable-next-line arbitrary-send-eth
@@ -78,8 +75,8 @@ contract OraSwapPool {
     function swapETHForOrUSD(uint256 _minOrUSDOut) external payable returns (uint256 orUSDOut) {
         orUSDOut = getOrUSDOut(msg.value);
         require(orUSDOut >= _minOrUSDOut, "OraSwapPool: slippage");
-        reserveETH = reserveETH.add(msg.value);
-        reserveOrUSD = reserveOrUSD.sub(orUSDOut);
+        reserveETH = reserveETH + msg.value;
+        reserveOrUSD = reserveOrUSD - orUSDOut;
         require(orUSD.transfer(msg.sender, orUSDOut), "OraSwapPool: transfer failed");
         emit Swap(msg.sender, true, msg.value, orUSDOut);
     }

@@ -11,10 +11,11 @@ ORA_RPC_URL=https://sepolia.base.org ORA_DEPLOYMENT=app/deployment-baseSepolia.j
   node scripts/watch-invariants.js                       # testnet
 ```
 The watcher pinpoints the violated invariant. Then follow the matching
-scenario below. The protocol has **no admin keys after deployment** — every
-response is a *permissionless* action (anyone can run it) or a *communication*
-action. That is by design: there is nothing to compromise, and nothing that
-needs a 3am key ceremony.
+scenario below. The protocol has **no admin keys after deployment except the
+guardian** — a pause-only multisig that can halt NEW BORROWING per branch
+(see *Guardian operations*). Every other response is a *permissionless* action
+(anyone can run it) or a *communication* action. That is by design: there is
+almost nothing to compromise, and nothing that needs a 3am key ceremony.
 
 ---
 
@@ -96,6 +97,25 @@ design.
 
 ---
 
+## Guardian operations (pause-only emergency brake)
+
+The `OraGuardian` holder (a multisig, `ORA_GUARDIAN` at deploy time) can pause
+**new borrowing only**, per branch: `pauseBorrowing(borrowerOps, duration)`
+with 0 < duration ≤ 30 days. Pausing blocks `openTrove` and debt-increasing
+`adjustTrove`; repays, collateral top-ups, closes, liquidations, redemptions,
+and SP flows all continue. Every pause auto-expires; the branch contracts can
+never be re-pointed at a new guardian (one-shot wiring), but the holder can
+rotate itself (`transferHolder`, two-step via `pendingHolder`).
+
+**When to pause**: an oracle attack in progress (borrowing against a
+manipulated price), a collateral-wrapper impairment (S6), or any live
+exploit that mints unbacked orUSD. Pausing does NOT stop liquidations — run
+the keeper in parallel to clear underwater troves.
+**When NOT to**: TCR crises (S3) need liquidations, not a borrowing freeze;
+freezing borrowing during a liquidity crunch can trap the recovery.
+**After expiry**: borrowing resumes automatically; post-mortem before
+re-pausing (a second pause needs a fresh multisig transaction).
+
 ## Keeper operations
 
 ```bash
@@ -105,13 +125,18 @@ ORA_KEEPER_KEY=0x... ORA_RPC_URL=... ORA_DEPLOYMENT=... node scripts/bots/liquid
 ```
 The keeper prefers `liquidatePartial` inside the soft band (gentler for the
 borrower, 0.5% caller reward), falls back to full liquidation, and simulates
-every call before spending gas.
+every call before spending gas. For wide sweeps (many troves at once), route
+through the on-chain `BatchLiquidator` (`liquidateTroves(tm, sorted, n)` walks
+riskiest-first; `batchLiquidateTroves(tm, list)` takes an explicit list) —
+it skips non-liquidatable troves instead of reverting the whole sweep, and
+emits `TroveLiquidationAttempted(tm, borrower, success)` per attempt.
 
 ## Key management posture
 
-- **Testnet**: throwaway deployer key, committed by necessity (CI has no
-  secret access); it holds faucet ETH only. Owner can override with a
-  `DEPLOYER_KEY` Actions secret at any time.
+- **Testnet**: secrets-only. CI deploys with the `DEPLOYER_KEY` Actions
+  secret (faucet ETH only); local deploys use `ORA_DEPLOYER_KEY` or the
+  gitignored `ora-mvp/.secret`. The pre-rotation throwaway key committed in
+  early history is abandoned and must never be funded (it is public).
 - **Production**: deploy from a Safe multisig, renounce the branch registrar
   (`ORA_RENOUNCE_REGISTRAR=1`) in the same ceremony, verify with
   `verify-tokenomics.js` (47/47 requires the renounce). After that there are

@@ -8,6 +8,7 @@ import "../Interfaces/ILUSDToken.sol";
 import "../Interfaces/ICollSurplusPool.sol";
 import "../Interfaces/ISortedTroves.sol";
 import "../Interfaces/ILQTYStaking.sol";
+import "../Interfaces/IOraGuardian.sol";
 import "../Dependencies/LiquityBase.sol";
 import "../Dependencies/Ownable.sol";
 import "../Dependencies/CheckContract.sol";
@@ -34,6 +35,11 @@ contract BorrowerOperationsRates is LiquityBase, Ownable, CheckContract, IBorrow
 
     ILQTYStaking public lqtyStaking;
     address public lqtyStakingAddress;
+
+    // --- ORA guardian: per-branch borrowing pause (emergency brake) ---
+    // address(0) = no guardian wired (pausing disabled). Set once, before
+    // setAddresses() renounces ownership.
+    IOraGuardian public guardian;
 
     ILUSDToken public lusdToken;
 
@@ -100,6 +106,23 @@ contract BorrowerOperationsRates is LiquityBase, Ownable, CheckContract, IBorrow
     event LUSDBorrowingFeePaid(address indexed _borrower, uint _LUSDFee);
     
     // --- Dependency setters ---
+
+    // One-shot guardian wiring. checkContract: a garbage address would
+    // fail-closed and brick borrowing, so fat fingers must revert here.
+    function setGuardian(address _guardian) external onlyOwner {
+        require(address(guardian) == address(0), "BorrowerOperations: guardian already set");
+        checkContract(_guardian);
+        guardian = IOraGuardian(_guardian);
+    }
+
+    // Fail-open when unwired (testnets); otherwise defers to the guardian.
+    function _borrowingPaused() internal view returns (bool) {
+        return address(guardian) != address(0) && guardian.isBorrowingPaused(address(this));
+    }
+
+    function _requireBorrowingNotPaused() internal view {
+        require(!_borrowingPaused(), "BorrowerOperations: borrowing is paused");
+    }
 
     function setAddresses(
         address _troveManagerAddress,
@@ -169,6 +192,7 @@ contract BorrowerOperationsRates is LiquityBase, Ownable, CheckContract, IBorrow
      * No one-off borrowing fee — continuous interest replaces it.
      * Hints position the trove in the rate-ordered sorted list. */
     function openTroveWithRate(uint _LUSDAmount, uint _annualRate, address _upperHint, address _lowerHint) external payable {
+        _requireBorrowingNotPaused();
         ContractsCache memory contractsCache = ContractsCache(troveManager, activePool, lusdToken);
         LocalVariables_openTrove memory vars;
 
@@ -258,6 +282,9 @@ contract BorrowerOperationsRates is LiquityBase, Ownable, CheckContract, IBorrow
     * If both are positive, it will revert.
     */
     function _adjustTrove(address _borrower, uint _collWithdrawal, uint _LUSDChange, bool _isDebtIncrease, address _upperHint, address _lowerHint, uint _maxFeePercentage) internal {
+        // Choke point: debt increases (withdrawals, top-up borrows) halt while
+        // paused; repays, collateral moves, rate changes and closes always go through.
+        if (_isDebtIncrease && _LUSDChange > 0) { _requireBorrowingNotPaused(); }
         ContractsCache memory contractsCache = ContractsCache(troveManager, activePool, lusdToken);
         LocalVariables_adjustTrove memory vars;
 

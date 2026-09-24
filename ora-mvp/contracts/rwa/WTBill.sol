@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
-
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/IERC20.sol";
+pragma solidity 0.8.24;
 
 interface IMockTBillFaucet {
     function faucet(uint256 _amount) external;
@@ -28,8 +25,6 @@ interface IMockTBillFaucet {
  * The branch prices wmTBILL at NAV × rate via WTBillPriceFeed.
  */
 contract WTBill {
-    using SafeMath for uint256;
-
     string public constant name = "Wrapped mTBILL (yield-share)";
     string public constant symbol = "wmTBILL";
     uint8 public constant decimals = 18;
@@ -57,7 +52,7 @@ contract WTBill {
     event SkimSettled(uint256 newRate, uint256 skimmed);
     event SkimClaimed(address indexed to, uint256 amount);
 
-    constructor(address _underlying, address _feeReceiver) public {
+    constructor(address _underlying, address _feeReceiver) {
         require(_underlying != address(0) && _feeReceiver != address(0), "WTBill: zero address");
         underlying = IMockTBillFaucet(_underlying);
         feeReceiver = _feeReceiver;
@@ -68,18 +63,18 @@ contract WTBill {
 
     // Current rate, including un-settled linear decay since lastSettle
     function currentRate() public view returns (uint256) {
-        uint256 dt = block.timestamp.sub(lastSettle);
-        uint256 decay = rate.mul(SKIM_RATE_PER_YEAR).mul(dt).div(ONE_YEAR).div(DECIMAL_PRECISION);
-        return rate.sub(decay);
+        uint256 dt = block.timestamp - lastSettle;
+        uint256 decay = rate * SKIM_RATE_PER_YEAR * dt / ONE_YEAR / DECIMAL_PRECISION;
+        return rate - decay;
     }
 
     function settle() public {
         uint256 newRate = currentRate();
         if (newRate == rate) { lastSettle = block.timestamp; return; }
-        uint256 skimmed = totalSupply.mul(rate.sub(newRate)).div(DECIMAL_PRECISION);
+        uint256 skimmed = totalSupply * (rate - newRate) / DECIMAL_PRECISION;
         rate = newRate;
         lastSettle = block.timestamp;
-        skimAccrued = skimAccrued.add(skimmed);
+        skimAccrued = skimAccrued + skimmed;
         emit SkimSettled(newRate, skimmed);
     }
 
@@ -97,7 +92,7 @@ contract WTBill {
     function wrap(uint256 _underlyingAmount) external returns (uint256 shares) {
         settle();
         require(_underlyingAmount > 0, "WTBill: zero amount");
-        shares = _underlyingAmount.mul(DECIMAL_PRECISION).div(rate);
+        shares = _underlyingAmount * DECIMAL_PRECISION / rate;
         require(underlying.transferFrom(msg.sender, address(this), _underlyingAmount), "WTBill: transfer in failed");
         _mint(msg.sender, shares);
         emit Wrapped(msg.sender, _underlyingAmount, shares);
@@ -106,7 +101,7 @@ contract WTBill {
     function unwrap(uint256 _shares) external returns (uint256 underlyingAmount) {
         settle();
         require(_shares > 0, "WTBill: zero shares");
-        underlyingAmount = _shares.mul(rate).div(DECIMAL_PRECISION);
+        underlyingAmount = _shares * rate / DECIMAL_PRECISION;
         _burn(msg.sender, _shares);
         require(underlying.transfer(msg.sender, underlyingAmount), "WTBill: transfer out failed");
         emit Unwrapped(msg.sender, underlyingAmount, _shares);
@@ -116,12 +111,12 @@ contract WTBill {
     // so the app's faucet flow is identical to the raw-token branches.
     function faucet(uint256 _shares) external {
         settle();
-        uint256 needed = _shares.mul(rate).div(DECIMAL_PRECISION).add(1);
+        uint256 needed = _shares * rate / DECIMAL_PRECISION + 1;
         uint256 left = needed;
         while (left > 0) {
             uint256 chunk = left > FAUCET_CHUNK ? FAUCET_CHUNK : left;
             underlying.faucet(chunk);
-            left = left.sub(chunk);
+            left = left - chunk;
         }
         _mint(msg.sender, _shares);
         emit Wrapped(msg.sender, needed, _shares);
@@ -141,27 +136,27 @@ contract WTBill {
     }
 
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool) {
-        allowance[_from][msg.sender] = allowance[_from][msg.sender].sub(_value, "WTBill: allowance exceeded");
+        allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
         _transfer(_from, _to, _value);
         return true;
     }
 
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(_to != address(0), "WTBill: transfer to zero address");
-        balanceOf[_from] = balanceOf[_from].sub(_value, "WTBill: balance exceeded");
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(_from, _to, _value);
     }
 
     function _mint(address _to, uint256 _value) internal {
-        totalSupply = totalSupply.add(_value);
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        totalSupply = totalSupply + _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(address(0), _to, _value);
     }
 
     function _burn(address _from, uint256 _value) internal {
-        balanceOf[_from] = balanceOf[_from].sub(_value, "WTBill: burn exceeds balance");
-        totalSupply = totalSupply.sub(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        totalSupply = totalSupply - _value;
         emit Transfer(_from, address(0), _value);
     }
 }

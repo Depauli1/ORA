@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/IERC20.sol";
+import "../dependencies08/IERC20.sol";
 
 interface IBORates {
-    function openTroveWithRate(uint _LUSDAmount, uint _annualRate, address _upperHint, address _lowerHint) external payable;
+    function openTroveWithRate(uint256 _LUSDAmount, uint256 _annualRate, address _upperHint, address _lowerHint) external payable;
     function addColl(address _upperHint, address _lowerHint) external payable;
-    function withdrawLUSD(uint _maxFeePercentage, uint _LUSDAmount, address _upperHint, address _lowerHint) external;
-    function repayLUSD(uint _LUSDAmount, address _upperHint, address _lowerHint) external;
-    function withdrawColl(uint _collWithdrawal, address _upperHint, address _lowerHint) external;
+    function withdrawLUSD(uint256 _maxFeePercentage, uint256 _LUSDAmount, address _upperHint, address _lowerHint) external;
+    function repayLUSD(uint256 _LUSDAmount, address _upperHint, address _lowerHint) external;
+    function withdrawColl(uint256 _collWithdrawal, address _upperHint, address _lowerHint) external;
     function closeTrove() external;
 }
 
 interface ITMRatesView {
-    function getTroveStatus(address _borrower) external view returns (uint);
-    function getEntireDebtAndColl(address _borrower) external view returns (uint debt, uint coll, uint pendingDebt, uint pendingColl);
-    function troveAnnualRate(address _borrower) external view returns (uint);
+    function getTroveStatus(address _borrower) external view returns (uint256);
+    function getEntireDebtAndColl(address _borrower) external view returns (uint256 debt, uint256 coll, uint256 pendingDebt, uint256 pendingColl);
+    function troveAnnualRate(address _borrower) external view returns (uint256);
 }
 
 interface IPriceView {
@@ -49,8 +48,6 @@ interface IPool {
  *   orUSD, repeat; close and sweep everything to the owner.
  */
 contract LeverZap {
-    using SafeMath for uint256;
-
     uint256 internal constant DECIMAL_PRECISION = 1e18;
     uint256 internal constant MIN_NET_DEBT = 1800e18;
     uint256 internal constant GAS_COMP = 200e18;
@@ -73,14 +70,14 @@ contract LeverZap {
         _;
     }
 
-    constructor(address _owner, address _bo, address _tm, address _feed, address _pool, address _orUSD) public {
+    constructor(address _owner, address _bo, address _tm, address _feed, address _pool, address _orUSD) {
         owner = _owner;
         borrowerOps = IBORates(_bo);
         troveManager = ITMRatesView(_tm);
         priceFeed = IPriceView(_feed);
         pool = IPool(_pool);
         orUSD = IERC20(_orUSD);
-        IERC20(_orUSD).approve(_pool, uint256(-1));
+        IERC20(_orUSD).approve(_pool, type(uint256).max);
     }
 
     receive() external payable {} // BO collateral withdrawals & pool swaps pay in ETH
@@ -94,7 +91,7 @@ contract LeverZap {
         require(troveManager.getTroveStatus(address(this)) != 1, "LeverZap: position already open");
 
         uint256 price = priceFeed.getPrice();
-        uint256 debt = msg.value.mul(price).div(DECIMAL_PRECISION).mul(_ltvBps).div(10000);
+        uint256 debt = msg.value * price / DECIMAL_PRECISION * _ltvBps / 10000;
         require(debt >= MIN_NET_DEBT, "LeverZap: deposit too small for min 1800 orUSD debt");
         borrowerOps.openTroveWithRate{ value: msg.value }(debt, _annualRate, address(0), address(0));
 
@@ -103,7 +100,7 @@ contract LeverZap {
             if (bal < MIN_STEP) break;
             uint256 ethOut = pool.swapOrUSDForETH(bal, 0); // aggregate-guarded below
             borrowerOps.addColl{ value: ethOut }(address(0), address(0));
-            uint256 more = ethOut.mul(price).div(DECIMAL_PRECISION).mul(_ltvBps).div(10000);
+            uint256 more = ethOut * price / DECIMAL_PRECISION * _ltvBps / 10000;
             if (more < MIN_STEP) break;
             borrowerOps.withdrawLUSD(MAX_FEE, more, address(0), address(0));
         }
@@ -116,11 +113,11 @@ contract LeverZap {
         (uint256 d, uint256 c, , ) = troveManager.getEntireDebtAndColl(address(this));
         // aggregate slippage bound: remaining equity (at ORACLE price) must be
         // at least (1 - maxSlippage) of the deposited value
-        uint256 collValue = c.mul(price).div(DECIMAL_PRECISION);
-        uint256 netDebt = d.sub(GAS_COMP);
+        uint256 collValue = c * price / DECIMAL_PRECISION;
+        uint256 netDebt = d - GAS_COMP;
         require(collValue > netDebt, "LeverZap: slippage exceeded");
-        require(collValue.sub(netDebt) >=
-            msg.value.mul(price).div(DECIMAL_PRECISION).mul(10000 - _maxSlippageBps).div(10000),
+        require(collValue - netDebt >=
+            msg.value * price / DECIMAL_PRECISION * (10000 - _maxSlippageBps) / 10000,
             "LeverZap: slippage exceeded");
         emit LeverOpened(msg.value, c, d);
     }
@@ -134,34 +131,34 @@ contract LeverZap {
         uint256 equity0;
         {
             (uint256 d0, uint256 c0, , ) = troveManager.getEntireDebtAndColl(address(this));
-            uint256 cv0 = c0.mul(entryPrice).div(DECIMAL_PRECISION);
-            uint256 nd0 = d0.sub(GAS_COMP);
-            equity0 = cv0 > nd0 ? cv0.sub(nd0) : 0;
+            uint256 cv0 = c0 * entryPrice / DECIMAL_PRECISION;
+            uint256 nd0 = d0 - GAS_COMP;
+            equity0 = cv0 > nd0 ? cv0 - nd0 : 0;
         }
         for (uint256 i = 0; i < 20; i++) {
             (uint256 debt, uint256 coll, , ) = troveManager.getEntireDebtAndColl(address(this));
             uint256 bal = orUSD.balanceOf(address(this));
 
-            if (bal >= debt.sub(GAS_COMP)) {
+            if (bal >= debt - GAS_COMP) {
                 borrowerOps.closeTrove();
                 break;
             }
             // repay as much as allowed (net debt must stay >= 1800)
-            uint256 net = debt.sub(GAS_COMP);
+            uint256 net = debt - GAS_COMP;
             if (bal > 0 && net > MIN_NET_DEBT) {
-                uint256 r = bal < net.sub(MIN_NET_DEBT) ? bal : net.sub(MIN_NET_DEBT);
+                uint256 r = bal < net - MIN_NET_DEBT ? bal : net - MIN_NET_DEBT;
                 if (r > 0) { borrowerOps.repayLUSD(r, address(0), address(0)); }
             }
             // withdraw collateral above the 112% safety line and swap it back
             (debt, coll, , ) = troveManager.getEntireDebtAndColl(address(this));
             uint256 price = priceFeed.getPrice();
-            uint256 needColl = debt.mul(UNWIND_ICR).div(price);
-            require(coll > needColl.add(1e15), "LeverZap: cannot unwind further (ICR too thin)");
-            uint256 free = coll.sub(needColl);
+            uint256 needColl = debt * UNWIND_ICR / price;
+            require(coll > needColl + 1e15, "LeverZap: cannot unwind further (ICR too thin)");
+            uint256 free = coll - needColl;
             borrowerOps.withdrawColl(free, address(0), address(0));
             pool.swapETHForOrUSD{ value: address(this).balance }(0); // aggregate-guarded below
         }
-        require(troveManager.getTroveStatus(address(this)) != 1, "LeverZap: unwind incomplete — try again or use exec()");
+        require(troveManager.getTroveStatus(address(this)) != 1, unicode"LeverZap: unwind incomplete — try again or use exec()");
 
         // convert any surplus orUSD back to ETH so the user exits in one asset
         uint256 orUSDLeft = orUSD.balanceOf(address(this));
@@ -171,14 +168,14 @@ contract LeverZap {
         }
         // aggregate slippage bound: ETH returned must be worth at least
         // (1 - maxSlippage) of the position's entry equity
-        require(address(this).balance.mul(entryPrice).div(DECIMAL_PRECISION) >=
-            equity0.mul(10000 - _maxSlippageBps).div(10000),
+        require(address(this).balance * entryPrice / DECIMAL_PRECISION >=
+            equity0 * (10000 - _maxSlippageBps) / 10000,
             "LeverZap: slippage exceeded");
         uint256 ethLeft = address(this).balance;
         if (ethLeft > 0) {
             // owner is immutable and set by the factory to the zap's creator
             // slither-disable-next-line arbitrary-send-eth
-            (bool ok, ) = owner.call{ value: ethLeft }("");
+            (bool ok, ) = payable(owner).call{ value: ethLeft }("");
             require(ok, "LeverZap: ETH sweep failed");
         }
         emit LeverClosed(ethLeft, orUSDLeft);
@@ -211,7 +208,7 @@ contract LeverZapFactory {
 
     event ZapCreated(address indexed user, address zap);
 
-    constructor(address _bo, address _tm, address _feed, address _pool, address _orUSD) public {
+    constructor(address _bo, address _tm, address _feed, address _pool, address _orUSD) {
         borrowerOps = _bo;
         troveManager = _tm;
         priceFeed = _feed;

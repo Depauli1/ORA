@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/SafeMath.sol";
-import "../Interfaces/IPriceFeed.sol";
+import "../dependencies08/IPriceFeed.sol";
 
 interface IRWAFeed {
     function fetchPrice() external returns (uint256);
@@ -25,7 +24,6 @@ interface IWTBillRate {
  * underlying NAV feed passes through untouched.
  */
 contract WTBillPriceFeed is IPriceFeed {
-    using SafeMath for uint256;
 
     string public constant NAME = "WTBillPriceFeed";
     uint256 internal constant DECIMAL_PRECISION = 1e18;
@@ -33,7 +31,7 @@ contract WTBillPriceFeed is IPriceFeed {
     IRWAFeed public immutable navFeed;
     IWTBillRate public immutable wrapper;
 
-    constructor(address _navFeed, address _wrapper) public {
+    constructor(address _navFeed, address _wrapper) {
         require(_navFeed != address(0) && _wrapper != address(0), "WTBillPriceFeed: zero address");
         navFeed = IRWAFeed(_navFeed);
         wrapper = IWTBillRate(_wrapper);
@@ -41,12 +39,12 @@ contract WTBillPriceFeed is IPriceFeed {
 
     function fetchPrice() external override returns (uint256) {
         uint256 nav = navFeed.fetchPrice();
-        return nav.mul(wrapper.currentRate()).div(DECIMAL_PRECISION);
+        return nav * wrapper.currentRate() / DECIMAL_PRECISION;
     }
 
     function getPrice() external view returns (uint256) {
         uint256 nav = navFeed.getPrice();
-        return nav.mul(wrapper.currentRate()).div(DECIMAL_PRECISION);
+        return nav * wrapper.currentRate() / DECIMAL_PRECISION;
     }
 
     function oracleLive() external view returns (bool) {
