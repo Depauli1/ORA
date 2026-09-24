@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORA Protocol — Interest-free borrowing, hard-pegged orUSD</title>
+<link rel="icon" href="logo.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="logo.png" alt="ORA" />
+    <div>
+      <h1>ORA <span class="badge">TESTNET MVP</span></h1>
+      <p>Interest-free borrowing · hard-pegged <b>orUSD</b></p>
+    </div>
+  </div>
+  <div class="account">
+    <select id="accountSelect">
+      <option value="alice">Alice (demo)</option>
+      <option value="bob">Bob (demo)</option>
+      <option value="carol">Carol (liquidator)</option>
+    </select>
+    <div class="balances">
+      <span id="balEth">— ETH</span>
+      <span id="balOrusd" class="orusd">— orUSD</span>
+      <span id="balOra" class="ora">— ORA</span>
+    </div>
+    <div class="addr" id="addr">—</div>
+  </div>
+</header>
+
+<section class="stats" id="stats">
+  <div class="stat"><label>ETH Price</label><b id="stEthPrice">—</b></div>
+  <div class="stat"><label>TCR</label><b id="stTcr">—</b></div>
+  <div class="stat"><label>Mode</label><b id="stMode">—</b></div>
+  <div class="stat"><label>orUSD Supply</label><b id="stSupply">—</b></div>
+  <div class="stat"><label>Troves</label><b id="stTroves">—</b></div>
+  <div class="stat"><label>Stability Pool</label><b id="stSp">—</b></div>
+  <div class="stat"><label>Borrow Fee</label><b id="stFee">—</b></div>
+</section>
+
+<main>
+  <!-- TROVE -->
+  <div class="card" id="troveCard">
+    <h2>My Trove <span class="hint">borrow orUSD against ETH · 0% interest</span></h2>
+
+    <div id="troveNone">
+      <div class="row">
+        <div class="field">
+          <label>Collateral (ETH)</label>
+          <input id="openColl" type="number" value="5" min="0" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Borrow (orUSD) <span class="hint">min 1,800</span></label>
+          <input id="openDebt" type="number" value="4000" min="1800" step="100" />
+        </div>
+      </div>
+      <div class="preview" id="openPreview">—</div>
+      <button class="primary" id="btnOpen">Open Trove &amp; mint orUSD</button>
+    </div>
+
+    <div id="troveActive" style="display:none">
+      <div class="kv">
+        <div><label>Collateral</label><b id="tvColl">—</b></div>
+        <div><label>Debt</label><b id="tvDebt">—</b></div>
+        <div><label>Collateral Ratio</label><b id="tvIcr">—</b></div>
+        <div><label>Liquidation Price</label><b id="tvLiq">—</b></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Amount</label><input id="adjAmount" type="number" value="1" min="0" step="0.1" /></div>
+      </div>
+      <div class="btnrow">
+        <button id="btnAddColl">Add ETH</button>
+        <button id="btnWithdrawColl">Withdraw ETH</button>
+        <button id="btnBorrowMore">Borrow orUSD</button>
+        <button id="btnRepay">Repay orUSD</button>
+      </div>
+      <button class="danger" id="btnClose">Close Trove (repay all)</button>
+    </div>
+  </div>
+
+  <!-- STABILITY POOL -->
+  <div class="card">
+    <h2>Stability Pool <span class="hint">earn liquidation ETH + ORA rewards</span></h2>
+    <div class="kv">
+      <div><label>My Deposit</label><b id="spDeposit">—</b></div>
+      <div><label>ETH Gain</label><b id="spEthGain">—</b></div>
+      <div><label>ORA Reward</label><b id="spOraGain">—</b></div>
+      <div><label>Pool Share</label><b id="spShare">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="spAmount" type="number" value="1000" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnSpDeposit">Deposit</button>
+      <button id="btnSpWithdraw">Withdraw (claims gains)</button>
+    </div>
+  </div>
+
+  <!-- ORA STAKING -->
+  <div class="card">
+    <h2>Stake ORA <span class="hint">earn 100% of protocol fees</span></h2>
+    <div class="kv">
+      <div><label>My Stake</label><b id="stkAmount">—</b></div>
+      <div><label>ETH Fees Earned</label><b id="stkEth">—</b></div>
+      <div><label>orUSD Fees Earned</label><b id="stkOrusd">—</b></div>
+      <div><label>Faucet</label><button class="mini" id="btnFaucet">Get 100 test ORA</button></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>ORA amount</label><input id="stkInput" type="number" value="50" min="0" step="10" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnStake">Stake</button>
+      <button id="btnUnstake">Unstake (claims fees)</button>
+    </div>
+  </div>
+
+  <!-- MARKET SIMULATOR + RISKY TROVES -->
+  <div class="card wide">
+    <h2>Market Simulator <span class="hint">testnet oracle control — crash the market, run liquidations</span></h2>
+    <div class="simrow">
+      <span>ETH price:</span> <b id="simPrice">—</b>
+      <button class="mini" data-bump="-10">−10%</button>
+      <button class="mini" data-bump="-5">−5%</button>
+      <button class="mini" data-bump="5">+5%</button>
+      <button class="mini" data-bump="10">+10%</button>
+      <input id="simInput" type="number" placeholder="custom $" style="width:110px" />
+      <button class="mini" id="btnSetPrice">Set</button>
+    </div>
+    <table id="trovesTable">
+      <thead><tr><th>Owner</th><th>Collateral</th><th>Debt</th><th>ICR</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<div id="toast"></div>
+<footer>ORA Protocol MVP — Liquity-engine core, modern stack. Local testnet · chain 31337. Not financial advice; demo keys are public.</footer>
+
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
