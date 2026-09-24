@@ -50,7 +50,17 @@ function toast(msg, ms = 4200) {
 function reason(e) {
   const m = e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
   const match = m.match(/reverted with reason string '([^']+)'/);
-  return match ? match[1] : m.slice(0, 140);
+  return rebrand(match ? match[1] : m.slice(0, 140));
+}
+
+// Contracts keep upstream Liquity identifiers verbatim (audit-diff stays
+// minimal), so on-chain revert strings say LUSD/LQTY — translate any message
+// to ORA branding before a user ever sees it.
+function rebrand(s) {
+  return String(s)
+    .replace(/LUSD/g, "orUSD")
+    .replace(/LQTY/g, "ORA")
+    .replace(/Liquity/g, "ORA");
 }
 
 async function tx(label, fn) {
