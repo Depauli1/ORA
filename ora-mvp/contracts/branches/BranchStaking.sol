@@ -138,7 +138,7 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
 
          // Send accumulated LUSD and ETH gains to the caller
         if (currentStake != 0) {
-            lusdToken.transfer(msg.sender, LUSDGain);
+            require(lusdToken.transfer(msg.sender, LUSDGain), "BranchStaking: LUSD transfer failed");
             _sendETHGainToUser(ETHGain);
         }
     }
@@ -166,7 +166,7 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
             emit TotalLQTYStakedUpdated(totalLQTYStaked);
 
             // Transfer unstaked LQTY to user
-            lqtyToken.transfer(msg.sender, LQTYToWithdraw);
+            require(lqtyToken.transfer(msg.sender, LQTYToWithdraw), "BranchStaking: LQTY transfer failed");
 
             emit StakeChanged(msg.sender, newStake);
         }
@@ -174,7 +174,7 @@ contract BranchStaking is ILQTYStaking, Ownable, CheckContract, BaseMath {
         emit StakingGainsWithdrawn(msg.sender, LUSDGain, ETHGain);
 
         // Send accumulated LUSD and ETH gains to the caller
-        lusdToken.transfer(msg.sender, LUSDGain);
+        require(lusdToken.transfer(msg.sender, LUSDGain), "BranchStaking: LUSD transfer failed");
         _sendETHGainToUser(ETHGain);
     }
 
