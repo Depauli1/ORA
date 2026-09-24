@@ -285,14 +285,7 @@ async function refresh() {
     $("stSp").textContent = fmt(spTotal, 0) + " orUSD";
     $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
 
-    // Oracle status badge (depeg judged client-side from the live rate)
-    const rateNum = C.aggRate ? Number(ethers.formatEther(stRate[0])) : 1;
-    const depeg = !!C.aggRate && stRate[1] && rateNum < 0.96;
-    $("stOracle").textContent = !oracleLive ? "FALLBACK"
-      : navShock ? "NAV SHOCK" : depeg ? "DEPEG CB"
-      : isRWA() ? "NAV feed ✓" : "Chainlink ✓";
-    $("stOracle").className = !oracleLive ? "warn" : (navShock || depeg) ? "bad" : "good";
-    if (C.aggRate) $("simRate").textContent = rateNum.toFixed(3);
+    if (C.aggRate) $("simRate").textContent = Number(ethers.formatEther(stRate[0])).toFixed(3);
     if (C.aggNav) {
       const nav = await C.aggNav.latestRoundData();
       $("simNav").textContent = "$" + (Number(nav[1]) / 1e8).toFixed(4);
