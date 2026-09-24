@@ -24,6 +24,11 @@ async function main() {
   console.log(`Network:  chainId ${net.chainId} (${RPC})`);
   console.log(`Deployer: ${wallet.address}`);
   console.log(`Balance:  ${ethers.formatEther(bal)} ETH (need >= ${ethers.formatEther(MIN)})`);
+  // GitHub Actions annotation — visible via the API even when raw logs aren't
+  if (process.env.GITHUB_ACTIONS) {
+    const kind = bal < MIN ? "error title=Deployer unfunded" : "notice title=Deployer funded";
+    console.log(`::${kind}::chainId ${net.chainId} | deployer ${wallet.address} | balance ${ethers.formatEther(bal)} ETH | need ${ethers.formatEther(MIN)} ETH`);
+  }
 
   if (bal < MIN) {
     console.log("\n==================== ACTION NEEDED ====================");
@@ -41,4 +46,10 @@ async function main() {
   console.log("\nFunded — proceeding with deployment.");
 }
 
-main().catch(e => { console.error("CHECK FAILED:", e.shortMessage || e.message); process.exit(1); });
+main().catch(e => {
+  if (process.env.GITHUB_ACTIONS) {
+    console.log(`::error title=Deployer check crashed (RPC problem?)::${(e.shortMessage || e.message || "").slice(0, 200)}`);
+  }
+  console.error("CHECK FAILED:", e.shortMessage || e.message);
+  process.exit(1);
+});
