@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-ethers");
+require("@nomicfoundation/hardhat-chai-matchers");
 
 // The sandbox blocks binaries.soliditylang.org, so we use the WASM compiler
 // from the `solc` npm package instead of letting Hardhat download solc.
@@ -94,5 +95,8 @@ module.exports = {
   },
   paths: {
     sources: "./contracts"
+  },
+  mocha: {
+    timeout: 180000
   }
 };

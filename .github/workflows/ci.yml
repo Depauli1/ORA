@@ -1,0 +1,82 @@
+# ORA continuous integration: compile + full test suite + Slither static
+# analysis on every push. The Slither gate fails the build on high-severity
+# findings in the NEW ORA contracts (zap, WTBill, vault/router, oracles,
+# branch staking/issuance); the audited upstream Liquity core and its textual
+# parameter forks are reported informationally but do not gate (their findings
+# are upstream patterns accepted by Liquity's audits).
+name: CI
+
+on:
+  push:
+    branches: ["arena/01a0d2bf-ora"]
+    paths-ignore:
+      - "ora-mvp/.deploy-testnet-trigger"
+      - "ora-mvp/app/deployment-baseSepolia.json"
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Hardhat test suite
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - run: npx hardhat compile
+      - name: Run test suite
+        run: npx hardhat test
+
+  slither:
+    name: Slither static analysis
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci
+      - run: pip install slither-analyzer
+      - run: npx hardhat compile
+      - name: Full report (informational, never fails)
+        run: |
+          slither . --ignore-compile --checklist --no-fail-pedantic > ../slither-full-report.md 2> ../slither-full-stderr.txt || true
+          {
+            echo "## Slither — full report (informational)"
+            echo "<details><summary>expand</summary>"
+            echo
+            head -c 60000 ../slither-full-report.md
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Gate — no high-severity findings in new ORA contracts
+        run: |
+          slither . --ignore-compile --fail-high \
+            --filter-paths "node_modules|Dependencies/|Interfaces/|TestContracts/|LQTY/|Proxy|TroveManager|BorrowerOperations|StabilityPool|ActivePool|DefaultPool|CollSurplusPool|HintHelpers|SortedTroves|MultiTroveGetter|GasPool|LUSDToken|Migrations|LiquityBaseRWA"
+      - name: Upload full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slither-report
+          path: |
+            slither-full-report.md
+            slither-full-stderr.txt

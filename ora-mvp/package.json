@@ -2,15 +2,19 @@
   "name": "ora-mvp",
   "version": "0.1.0",
   "private": true,
-  "description": "ORA Protocol — modern toolchain for the orUSD borrowing protocol MVP",
+  "description": "ORA Protocol \u2014 modern toolchain for the orUSD borrowing protocol MVP",
   "scripts": {
     "compile": "hardhat compile",
     "chain": "hardhat node --hostname 0.0.0.0",
     "deploy": "hardhat run scripts/deploy.js --network localhost",
-    "app": "node server.js"
+    "app": "node server.js",
+    "test": "hardhat test"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.1.2",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
+    "chai": "^4.5.0",
     "ethers": "^6.13.0",
     "hardhat": "^2.26.0",
     "solc": "0.6.11"
