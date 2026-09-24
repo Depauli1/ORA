@@ -48,6 +48,29 @@ async function main() {
   }
   await (await sp2.connect(signers[9]).provideToSP(E("120000"), Z)).wait();
   console.log("[wstETH] Stability Pool seeded: 120,000 orUSD");
+
+  // ---- Branch 3: mTBILL (RWA) ----
+  const tbill = await ethers.getContractAt("MockTBill", dep.branches.tBILL.collToken);
+  const bo3 = await ethers.getContractAt("BorrowerOperationsERC20", dep.branches.tBILL.borrowerOperations);
+  const sp3 = await ethers.getContractAt("StabilityPoolERC20", dep.branches.tBILL.stabilityPool);
+
+  // NAV $1.05 — branch TCR must clear CCR (150%), so the whale anchors it
+  const rwaTroves = [
+    { s: 12, coll: "500000", debt: "300000" }, // treasury desk, ~174%
+    { s: 13, coll: "60000",  debt: "45000"  }, // ~139%
+    { s: 14, coll: "12000",  debt: "11100"  }  // ~111% — soft-liq bait after a NAV shock
+  ];
+  for (const t of rwaTroves) {
+    const s = signers[t.s];
+    for (let left = BigInt(t.coll); left > 0n; left -= 100000n) {
+      await (await tbill.connect(s).faucet(E((left > 100000n ? 100000n : left).toString()))).wait();
+    }
+    await (await tbill.connect(s).approve(dep.branches.tBILL.borrowerOperations, ethers.MaxUint256)).wait();
+    await (await bo3.connect(s).openTrove(maxFee, E(t.debt), E(t.coll), Z, Z)).wait();
+    console.log(`[mTBILL] trove: ${t.coll} mTBILL / ${t.debt} orUSD (${s.address.slice(0,8)})`);
+  }
+  await (await sp3.connect(signers[12]).provideToSP(E("250000"), Z)).wait();
+  console.log("[mTBILL] Stability Pool seeded: 250,000 orUSD");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

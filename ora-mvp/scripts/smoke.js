@@ -13,7 +13,9 @@ const E = ethers.parseEther;
 const f = v => Number(ethers.formatEther(v)).toFixed(2);
 
 async function main() {
-  const provider = new ethers.JsonRpcProvider(RPC, undefined, { staticNetwork: true });
+  // cacheTimeout -1: disable ethers' 250ms request cache — rapid sequential
+  // txs otherwise refetch stale nonces after a NonceManager.reset()
+  const provider = new ethers.JsonRpcProvider(RPC, undefined, { staticNetwork: true, cacheTimeout: -1, batchMaxCount: 1 });
   const alice = new ethers.NonceManager(new ethers.Wallet(KEYS.alice, provider));
   const carol = new ethers.NonceManager(new ethers.Wallet(KEYS.carol, provider));
   const treasury = new ethers.NonceManager(new ethers.Wallet(KEYS.treasury, provider));
@@ -159,7 +161,89 @@ async function main() {
   await (await pf2.fetchPrice()).wait();
   console.log("[softliq] ETH price restored to $2000");
 
-  console.log("\nPHASE 1.5 + PHASE 2 SMOKE TEST PASSED ✓");
+  // ===== PHASE 4: RWA branch (mTBILL) =====
+  alice.reset(); carol.reset(); treasury.reset(); // resync NonceManagers after the long Phase 2 run
+  const B3 = dep.branches.tBILL;
+  const tb = new ethers.Contract(B3.collToken, dep.abis.mockTBill, alice);
+  const bo3 = new ethers.Contract(B3.borrowerOperations, dep.abis.borrowerOperationsERC20, alice);
+  const sp3 = new ethers.Contract(B3.stabilityPool, dep.abis.stabilityPoolERC20, alice);
+  const tm3 = new ethers.Contract(B3.troveManager, dep.abis.troveManagerV2, alice);
+  const pf3 = new ethers.Contract(B3.priceFeed, dep.abis.priceFeedRWA, treasury);
+  const aggNav = new ethers.Contract(B3.navAggregator, dep.abis.settableAggregator, treasury);
+
+  console.log("[rwa] mTBILL NAV:", f(await pf3.getPrice()), "| debt cap:", f(await bo3.debtCap()),
+    "| branch TCR:", (Number(await tm3.getTCR(await pf3.getPrice())) / 1e16).toFixed(1) + "%");
+
+  // open an RWA trove + join the RWA Stability Pool
+  await (await tb.faucet(E("20000"))).wait();
+  await (await tb.approve(B3.borrowerOperations, ethers.MaxUint256)).wait();
+  await (await bo3.openTrove(E("0.05"), E("10000"), E("20000"), Z, Z)).wait();
+  await (await sp3.provideToSP(E("2000"), Z)).wait();
+  console.log("[rwa] Alice: 20,000 mTBILL / 10,000 orUSD trove + 2,000 orUSD SP deposit");
+
+  // --- 4a. Debt cap: the branch can NEVER mint past its ceiling ---
+  const tbC = tb.connect(carol), bo3C = bo3.connect(carol);
+  for (let i = 0; i < 24; i++) await (await tbC.faucet(E("100000"))).wait();
+  await (await tbC.approve(B3.borrowerOperations, ethers.MaxUint256)).wait();
+  let capBlocked = false;
+  try {
+    await (await bo3C.openTrove(E("0.05"), E("1700000"), E("2400000"), Z, Z)).wait();
+  } catch (e) { capBlocked = true; carol.reset(); }
+  if (!capBlocked) throw new Error("debt cap should have blocked a 1.7M borrow");
+  console.log("[rwa] 1.7M orUSD borrow rejected — branch debt cap enforced ✓");
+  await (await bo3C.openTrove(E("0.05"), E("1500000"), E("2400000"), Z, Z)).wait();
+  console.log("[rwa] 1.5M orUSD borrow accepted (under cap) — total branch debt:",
+    f(await tm3.getEntireSystemDebt()), "/ cap", f(await bo3.debtCap()));
+
+  // --- 4b. NAV lifecycle: yield accrual, manipulation clamp, break-the-buck shock ---
+  alice.reset(); carol.reset(); treasury.reset();
+  await (await aggNav.setAnswer(105420000n)).wait(); // +0.4% — a month of T-bill yield
+  await (await pf3.fetchPrice()).wait();
+  console.log("[rwa] NAV accrual +0.4% — price:", f(await pf3.getPrice()), "| navShock:", await pf3.navShock());
+
+  await (await aggNav.setAnswer(120000000n)).wait(); // manipulated +14% spike
+  await (await pf3.fetchPrice()).wait();
+  const clamped = await pf3.lastGoodPrice();
+  console.log("[rwa] NAV spike to $1.20 — clamped to:", f(clamped), "(+2% max per update) ✓");
+  if (clamped > E("1.0754")) throw new Error("upside clamp failed");
+  await (await aggNav.setAnswer(105420000n)).wait(); // honest NAV returns
+  await (await pf3.fetchPrice()).wait();
+
+  // break the buck: NAV drops 3% below the high-water mark
+  treasury.reset(); alice.reset();
+  await (await aggNav.setAnswer(102257000n)).wait();
+  await (await pf3.fetchPrice()).wait();
+  const shockPrice = await pf3.lastGoodPrice();
+  console.log("[rwa] NAV shock -3% — price marked down:", f(shockPrice), "| navShock:", await pf3.navShock());
+  if (!(await pf3.navShock())) throw new Error("navShock flag should be active");
+
+  // --- 4c. Soft liquidation on the RWA branch (bait trove drops into the band) ---
+  const bait = "0xdF3e18d64BC6A983f673Ab319CCaE4f1a57C7097"; // signer 14
+  const baitIcr = await tm3.getCurrentICR(bait, shockPrice);
+  console.log("[rwa] bait trove ICR after shock:", (Number(baitIcr) / 1e16).toFixed(2) + "%");
+  const tbBefore = await tb.balanceOf(aliceAddr);
+  await (await tm3.liquidatePartial(bait)).wait();
+  console.log("[rwa] soft-liquidated — ICR restored to:",
+    (Number(await tm3.getCurrentICR(bait, shockPrice)) / 1e16).toFixed(2) + "%",
+    "| caller reward:", Number(ethers.formatEther(await tb.balanceOf(aliceAddr) - tbBefore)).toFixed(2), "mTBILL");
+
+  // --- 4d. RWA SP depositors earn ORA (own 500k allocation) ---
+  await provider.send("evm_increaseTime", [3600]);
+  await provider.send("evm_mine", []);
+  const oraBefore3 = await ora.balanceOf(aliceAddr);
+  await (await sp3.provideToSP(E("10"), Z)).wait();
+  const oraGain3 = await ora.balanceOf(aliceAddr) - oraBefore3;
+  console.log("[rwa] Alice SP ORA reward after 1h:", f(oraGain3));
+  if (oraGain3 === 0n) throw new Error("expected ORA gain for RWA SP depositor");
+
+  // NAV recovers — shock flag clears through the +2% ratchet
+  await (await aggNav.setAnswer(105420000n)).wait();
+  await (await pf3.fetchPrice()).wait();
+  await (await pf3.fetchPrice()).wait();
+  console.log("[rwa] NAV recovered — price:", f(await pf3.getPrice()), "| navShock:", await pf3.navShock());
+  if (await pf3.navShock()) throw new Error("navShock should clear after recovery");
+
+  console.log("\nPHASE 1.5 + 2 + 4 SMOKE TEST PASSED ✓");
 }
 
 main().catch(e => { console.error("SMOKE TEST FAILED:", e.shortMessage || e.message); process.exit(1); });

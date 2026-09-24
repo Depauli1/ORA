@@ -20,6 +20,9 @@ contract BorrowerOperationsERC20 is LiquityBase, Ownable, CheckContract, IBorrow
     // ORA Phase 1: branch collateral token (e.g. wstETH)
     IERC20 public collToken;
 
+    // ORA Phase 4: branch debt ceiling (0 = uncapped)
+    uint public debtCap;
+
     string constant public NAME = "BorrowerOperations";
 
     // --- Connected contract declarations ---
@@ -161,6 +164,14 @@ contract BorrowerOperationsERC20 is LiquityBase, Ownable, CheckContract, IBorrow
     function setCollToken(address _collTokenAddress) external onlyOwner {
         checkContract(_collTokenAddress);
         collToken = IERC20(_collTokenAddress);
+    }
+
+    // ORA Phase 4: optional branch debt ceiling (0 = uncapped). Bounds orUSD
+    // exposure to a single collateral — e.g. an RWA branch can never mint
+    // more than its cap, no matter what happens to the RWA. Must be called
+    // before setAddresses (which renounces ownership).
+    function setDebtCap(uint _debtCap) external onlyOwner {
+        debtCap = _debtCap;
     }
 
     function _pullCollateral(address _from, uint _amount) internal {
@@ -472,6 +483,9 @@ contract BorrowerOperationsERC20 is LiquityBase, Ownable, CheckContract, IBorrow
     // Issue the specified amount of LUSD to _account and increases the total active debt (_netDebtIncrease potentially includes a LUSDFee)
     function _withdrawLUSD(IActivePool _activePool, ILUSDToken _lusdToken, address _account, uint _LUSDAmount, uint _netDebtIncrease) internal {
         _activePool.increaseLUSDDebt(_netDebtIncrease);
+        // ORA Phase 4: every debt increase on this branch flows through here —
+        // enforce the branch debt ceiling (active + redistributed debt)
+        require(debtCap == 0 || getEntireSystemDebt() <= debtCap, "BorrowerOps: branch debt cap exceeded");
         _lusdToken.mint(_account, _LUSDAmount);
     }
 

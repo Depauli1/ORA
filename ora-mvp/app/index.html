@@ -54,7 +54,8 @@
   <span class="hint">Collateral branch:</span>
   <button class="tab active" id="tabETH" data-branch="ETH">ETH</button>
   <button class="tab" id="tabWstETH" data-branch="wstETH">wstETH <span class="new">Phase 1</span></button>
-  <button class="mini" id="btnWstFaucet" style="display:none">Get 10 test wstETH</button>
+  <button class="tab" id="tabTBILL" data-branch="tBILL">mTBILL <span class="new">RWA</span></button>
+  <button class="mini" id="btnWstFaucet" style="display:none">Get test collateral</button>
 </div>
 
 <main>
@@ -99,7 +100,7 @@
 
   <!-- STABILITY POOL -->
   <div class="card">
-    <h2>Stability Pool <span class="hint">earn liquidation ETH + ORA rewards</span></h2>
+    <h2>Stability Pool <span class="hint">earn liquidation <span class="collsym">ETH</span> + ORA rewards</span></h2>
     <div class="kv">
       <div><label>My Deposit</label><b id="spDeposit">—</b></div>
       <div><label><span class="collsym">ETH</span> Gain</label><b id="spEthGain">—</b></div>
@@ -153,6 +154,14 @@
       <button class="mini" data-rate="0.80">Depeg 0.80</button>
       <button class="mini" data-rate="1">Restore peg</button>
       <span class="hint">below 0.96 the circuit breaker trips</span>
+    </div>
+    <div class="simrow" id="navRow" style="display:none">
+      <span>mTBILL NAV:</span> <b id="simNav">—</b>
+      <button class="mini" data-nav="1.004" title="a month of T-bill yield">Accrue +0.4%</button>
+      <button class="mini" data-nav="1.14" title="manipulated spike — the feed clamps to +2% per update">Spike +14%</button>
+      <button class="mini" data-nav="0.97" title="break the buck — trips the NAV shock breaker">Shock −3%</button>
+      <button class="mini" data-nav="reset">Reset $1.05</button>
+      <span class="hint">drops &gt;2% below the high-water mark flag a NAV shock</span>
     </div>
     <table id="trovesTable">
       <thead><tr><th>Owner</th><th>Collateral</th><th>Debt</th><th>ICR</th><th></th></tr></thead>

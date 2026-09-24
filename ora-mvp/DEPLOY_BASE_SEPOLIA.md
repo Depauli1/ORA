@@ -38,6 +38,12 @@ npx hardhat run scripts/deploy-public.js --network baseSepolia
 This deploys and wires, in one run:
 - **ETH branch** — full native-ETH core (TroveManager, pools, BorrowerOperations)
 - **wstETH branch** — ERC20 pool suite + MockWstETH (public faucet, 1000/call)
+- **mTBILL branch (Phase 4, RWA)** — tokenized T-bill fund collateral
+  (`MockTBill`, faucet 100,000/call) with `RWAPriceFeed` (NAV oracle: +2%/update
+  upside clamp, sticky NAV-shock flag >2% below the high-water mark, 72h
+  staleness fallback), a **2,000,000 orUSD branch debt cap** (strict isolation
+  backstop, enforced on every mint), TroveManagerV2 soft liquidations,
+  BranchStaking, and 500,000 ORA of Stability Pool issuance
 - **Shared** — orUSD (both branches registered), ORA token, ORA staking
 - **Real oracle adapters (Phase 1.5)** — the ETH branch uses the live Chainlink
   ETH/USD feed on Base Sepolia (default `0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1`,
@@ -91,7 +97,13 @@ the sandbox firewall), and signs with MetaMask (auto adds/switches to chain
 a friendly "not deployed yet" notice.
 
 Phase 2 UI: the Stake ORA card is branch-aware (classic staking on the ETH
-branch, `BranchStaking` with auto-approve on the wstETH branch, fee labels in
+branch, `BranchStaking` with auto-approve on the other branches, fee labels in
 the branch's collateral symbol), Stability Pool cards show the real ORA reward
-on both branches, and the risky-troves table adds a **Soft-liq** button for
-wstETH troves inside the [105%, 110%) band.
+on all branches, and the risky-troves table adds a **Soft-liq** button for
+ERC20-branch troves inside the [105%, 110%) band.
+
+Phase 4 UI: an **mTBILL (RWA)** tab with its own faucet amount and open-trove
+defaults, a NAV simulator row (accrue a month of yield, spike +14% to watch
+the on-chain clamp cap it at +2%, shock −3% to trip the break-the-buck
+breaker), a **NAV SHOCK** oracle badge state, and the branch debt cap surfaced
+in the open-trove preview.

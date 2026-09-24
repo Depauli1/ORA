@@ -1,6 +1,7 @@
-// ORA Protocol — Phase 1 multi-branch deployment.
+// ORA Protocol — multi-branch deployment.
 // Branch 1: native ETH (upstream Liquity engine, unchanged)
-// Branch 2: wstETH (ERC20-collateral pool suite, same TroveManager bytecode)
+// Branch 2: wstETH (ERC20-collateral pool suite + Phase 2 tokenomics/soft-liq)
+// Branch 3: mTBILL (Phase 4 RWA branch — NAV oracle, strict debt cap)
 // Shared:   orUSD (multi-branch mint/burn), ORA token, ORA staking, issuance
 const hre = require("hardhat");
 const fs = require("fs");
@@ -17,6 +18,12 @@ const REAL_FEEDS = {
   }
 };
 const ORACLE_TIMEOUT = 48 * 3600; // generous staleness window for testnets
+
+// Phase 4 — RWA branch parameters
+const RWA_ORACLE_TIMEOUT = 72 * 3600;                 // daily NAV + weekend cover
+const RWA_DEBT_CAP = "2000000";                       // orUSD debt ceiling (strict isolation)
+const RWA_ORA_ALLOCATION = "500000";                  // ORA for the RWA Stability Pool
+const WST_ORA_ALLOCATION = "1000000";                 // ORA for the wstETH Stability Pool
 
 async function main() {
   const [deployer, , , , treasury] = await ethers.getSigners();
@@ -53,8 +60,16 @@ async function main() {
   const priceFeed = await deploy("ChainlinkPriceFeed", ethUsdAggregatorAddr, ORACLE_TIMEOUT);
   const priceFeed2 = await deploy("WstETHPriceFeed",
     ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH), ORACLE_TIMEOUT);
+
+  // Phase 4: tokenized T-bill fund (RWA). NAV per share starts at $1.05; on
+  // mainnet the aggregator would be the fund administrator's NAV oracle.
+  const tBill = await deploy("MockTBill");
+  const aggNav = await deploy("SettableAggregator", 8, "mTBILL NAV / USD", 105n * 10n ** 6n);
+  const priceFeed3 = await deploy("RWAPriceFeed", await a(aggNav), RWA_ORACLE_TIMEOUT);
+
   console.log(`  ETH/USD: $${ethers.formatEther(await priceFeed.getPrice())}` +
-    ` | wstETH/USD: $${ethers.formatEther(await priceFeed2.getPrice())}`);
+    ` | wstETH/USD: $${ethers.formatEther(await priceFeed2.getPrice())}` +
+    ` | mTBILL NAV: $${ethers.formatEther(await priceFeed3.getPrice())}`);
 
   // ---------------- Branch 1: native ETH ----------------
   console.log("\n— Branch 1: native ETH —");
@@ -167,9 +182,71 @@ async function main() {
   // Phase 2: BranchCommunityIssuance — fund 1,000,000 ORA from treasury, then activate (locks cap)
   await (await branchIssuance2.setAddresses(await a(oraToken), await a(stabilityPool2))).wait();
   await (await oraToken.connect(treasury).transfer(
-    await a(branchIssuance2), ethers.parseEther("1000000"))).wait();
+    await a(branchIssuance2), ethers.parseEther(WST_ORA_ALLOCATION))).wait();
   await (await branchIssuance2.activate()).wait();
   console.log("  branch 2 wired — BranchStaking + 1M ORA issuance live");
+
+  // ---------------- Branch 3: mTBILL (RWA, strictly isolated) ----------------
+  console.log("\n— Branch 3: mTBILL (RWA) —");
+  const sortedTroves3 = await deploy("SortedTroves");
+  const troveManager3 = await deploy("TroveManagerV2");
+  const activePool3 = await deploy("ActivePoolERC20");
+  const stabilityPool3 = await deploy("StabilityPoolERC20");
+  const gasPool3 = await deploy("GasPool");
+  const defaultPool3 = await deploy("DefaultPoolERC20");
+  const collSurplusPool3 = await deploy("CollSurplusPoolERC20");
+  const borrowerOperations3 = await deploy("BorrowerOperationsERC20");
+  const hintHelpers3 = await deploy("HintHelpers");
+  const multiTroveGetter3 = await deploy("MultiTroveGetter", await a(troveManager3), await a(sortedTroves3));
+  const branchStaking3 = await deploy("BranchStaking");
+  const branchIssuance3 = await deploy("BranchCommunityIssuance");
+
+  console.log("\n— Wiring branch 3 (mTBILL) —");
+  await (await orUSD.registerBranch(
+    await a(troveManager3), await a(stabilityPool3), await a(borrowerOperations3))).wait();
+
+  await (await sortedTroves3.setParams(maxBytes32, await a(troveManager3), await a(borrowerOperations3))).wait();
+  await (await troveManager3.setAddresses(
+    await a(borrowerOperations3), await a(activePool3), await a(defaultPool3),
+    await a(stabilityPool3), await a(gasPool3), await a(collSurplusPool3),
+    await a(priceFeed3), await a(orUSD), await a(sortedTroves3),
+    await a(oraToken), await a(branchStaking3))).wait();
+
+  // setCollToken + setDebtCap must precede setAddresses (which renounces ownership).
+  // The debt cap is the RWA isolation backstop: this branch can never mint
+  // more than RWA_DEBT_CAP orUSD regardless of what happens to the RWA.
+  await (await borrowerOperations3.setCollToken(await a(tBill))).wait();
+  await (await borrowerOperations3.setDebtCap(ethers.parseEther(RWA_DEBT_CAP))).wait();
+  await (await borrowerOperations3.setAddresses(
+    await a(troveManager3), await a(activePool3), await a(defaultPool3),
+    await a(stabilityPool3), await a(gasPool3), await a(collSurplusPool3),
+    await a(priceFeed3), await a(sortedTroves3), await a(orUSD), await a(branchStaking3))).wait();
+
+  await (await stabilityPool3.setCollToken(await a(tBill))).wait();
+  await (await stabilityPool3.setAddresses(
+    await a(borrowerOperations3), await a(troveManager3), await a(activePool3),
+    await a(orUSD), await a(sortedTroves3), await a(priceFeed3), await a(branchIssuance3))).wait();
+
+  await (await activePool3.setAddresses(
+    await a(borrowerOperations3), await a(troveManager3), await a(stabilityPool3),
+    await a(defaultPool3), await a(collSurplusPool3), await a(tBill))).wait();
+  await (await defaultPool3.setAddresses(
+    await a(troveManager3), await a(activePool3), await a(tBill))).wait();
+  await (await collSurplusPool3.setAddresses(
+    await a(borrowerOperations3), await a(troveManager3), await a(activePool3))).wait();
+  await (await collSurplusPool3.setCollToken(await a(tBill))).wait();
+  await (await hintHelpers3.setAddresses(await a(sortedTroves3), await a(troveManager3))).wait();
+
+  await (await branchStaking3.setCollToken(await a(tBill))).wait();
+  await (await branchStaking3.setAddresses(
+    await a(oraToken), await a(orUSD), await a(troveManager3),
+    await a(borrowerOperations3), await a(activePool3))).wait();
+
+  await (await branchIssuance3.setAddresses(await a(oraToken), await a(stabilityPool3))).wait();
+  await (await oraToken.connect(treasury).transfer(
+    await a(branchIssuance3), ethers.parseEther(RWA_ORA_ALLOCATION))).wait();
+  await (await branchIssuance3.activate()).wait();
+  console.log(`  branch 3 wired — debt cap ${RWA_DEBT_CAP} orUSD, ${RWA_ORA_ALLOCATION} ORA issuance live`);
 
   // ---------------- Export ----------------
   const abi = name => {
@@ -234,7 +311,30 @@ async function main() {
         hintHelpers: await a(hintHelpers2),
         multiTroveGetter: await a(multiTroveGetter2),
         branchStaking: await a(branchStaking2),
-        communityIssuance: await a(branchIssuance2)
+        communityIssuance: await a(branchIssuance2),
+        faucetAmount: "10"
+      },
+      tBILL: {
+        native: false,
+        rwa: true,
+        collSymbol: "mTBILL",
+        collToken: await a(tBill),
+        priceFeed: await a(priceFeed3),
+        navAggregator: await a(aggNav),
+        sortedTroves: await a(sortedTroves3),
+        troveManager: await a(troveManager3),
+        activePool: await a(activePool3),
+        stabilityPool: await a(stabilityPool3),
+        gasPool: await a(gasPool3),
+        defaultPool: await a(defaultPool3),
+        collSurplusPool: await a(collSurplusPool3),
+        borrowerOperations: await a(borrowerOperations3),
+        hintHelpers: await a(hintHelpers3),
+        multiTroveGetter: await a(multiTroveGetter3),
+        branchStaking: await a(branchStaking3),
+        communityIssuance: await a(branchIssuance3),
+        debtCap: RWA_DEBT_CAP,
+        faucetAmount: "10000"
       }
     },
     abis: {
@@ -253,6 +353,8 @@ async function main() {
       hintHelpers: abi("HintHelpers"),
       multiTroveGetter: abi("MultiTroveGetter"),
       mockWstETH: abi("MockWstETH"),
+      mockTBill: abi("MockTBill"),
+      priceFeedRWA: abi("RWAPriceFeed"),
       troveManagerV2: abi("TroveManagerV2"),
       branchStaking: abi("BranchStaking"),
       branchCommunityIssuance: abi("BranchCommunityIssuance")

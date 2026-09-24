@@ -57,7 +57,9 @@ module.exports = {
   networks: {
     hardhat: {
       chainId: 31337,
-      mining: { auto: true, interval: 5000 }
+      // Pure automine: combining auto + interval mining causes an EDR race
+      // where rapid tx bursts intermittently read stale nonces (NONCE_EXPIRED).
+      mining: { auto: true }
     },
     localhost: {
       url: "http://127.0.0.1:8545"

@@ -33,6 +33,8 @@ const short = a => a.slice(0, 6) + "…" + a.slice(-4);
 const isNative = () => dep.branches[branch].native;
 const collSym = () => dep.branches[branch].collSymbol;
 const bcfg = () => dep.branches[branch];
+const isRWA = () => !!dep.branches[branch].rwa;
+const faucetAmt = () => bcfg().faucetAmount || "10";
 const myAddr = () => wallet ? wallet.address : Z;
 
 function toast(msg, ms = 4200) {
@@ -69,7 +71,10 @@ async function tx(label, fn) {
 function connectContracts() {
   const runner = wallet ?? provider;
   const B = bcfg(), S = dep.shared, A = dep.abis;
-  C.priceFeed = new ethers.Contract(B.priceFeed, B.native ? A.priceFeed : A.priceFeedWstETH, runner);
+  C.priceFeed = new ethers.Contract(
+    B.priceFeed, B.native ? A.priceFeed : (B.rwa ? A.priceFeedRWA : A.priceFeedWstETH), runner);
+  C.aggNav = B.navAggregator
+    ? new ethers.Contract(B.navAggregator, A.settableAggregator, runner) : null;
   C.aggEth = B.ethUsdSettable
     ? new ethers.Contract(B.ethUsdAggregator, A.settableAggregator, runner) : null;
   C.aggRate = B.stEthEthAggregator
@@ -81,7 +86,8 @@ function connectContracts() {
   C.stabilityPool = new ethers.Contract(
     B.stabilityPool, B.native ? A.stabilityPool : A.stabilityPoolERC20, runner);
   C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, runner);
-  C.collToken = B.native ? null : new ethers.Contract(B.collToken, A.mockWstETH, runner);
+  C.collToken = B.native ? null
+    : new ethers.Contract(B.collToken, B.rwa ? A.mockTBill : A.mockWstETH, runner);
   C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
   C.ora = new ethers.Contract(S.oraToken, A.oraToken, runner);
   // Phase 2: each branch has its own staking pool — ETH branch uses the classic
@@ -106,8 +112,15 @@ function setBranch(name) {
     t.classList.toggle("active", t.dataset.branch === name));
   document.querySelectorAll(".collsym").forEach(el => (el.textContent = collSym()));
   $("btnWstFaucet").style.display = isNative() ? "none" : "inline-block";
+  $("btnWstFaucet").textContent = `Get ${Number(faucetAmt()).toLocaleString("en-US")} test ${collSym()}`;
   $("balWst").style.display = isNative() ? "none" : "inline";
-  $("depegRow").style.display = isNative() ? "none" : "flex";
+  $("depegRow").style.display = !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
+  $("navRow").style.display = isRWA() ? "flex" : "none";
+  $("priceRow").style.display = isRWA() ? "none" : "flex";
+  // sensible open-trove defaults per collateral
+  const defs = isRWA() ? ["10000", "5000"] : isNative() ? ["5", "4000"] : ["6", "6000"];
+  $("openColl").value = defs[0];
+  $("openDebt").value = defs[1];
   updateSimControls();
   connectContracts();
 }
@@ -115,7 +128,7 @@ function setBranch(name) {
 function updateSimControls() {
   const settable = !!bcfg().ethUsdSettable;
   document.querySelectorAll("#priceRow button, #priceRow input").forEach(el => (el.disabled = !settable));
-  $("simNote").style.display = settable ? "none" : "inline";
+  $("simNote").style.display = settable || isRWA() ? "none" : "inline";
 }
 
 async function setNetwork(mode) {
@@ -207,7 +220,7 @@ async function refresh() {
     const [tcr, recovery, supply, nTroves, spTotal, rate,
            ethBal, orusdBal, oraBal, wstBal, trove, entire,
            spDep, spEth, spOra, stake, stkEth, stkOrusd,
-           oracleLive, stRate] = await Promise.all([
+           oracleLive, stRate, navShock] = await Promise.all([
       C.troveManager.getTCR(p),
       C.troveManager.checkRecoveryMode(p),
       C.orUSD.totalSupply(),
@@ -227,7 +240,8 @@ async function refresh() {
       C.staking.getPendingETHGain(me),
       C.staking.getPendingLUSDGain(me),
       C.priceFeed.oracleLive(),
-      isNative() ? [0n, true] : C.priceFeed.getStEthEthRate()
+      C.aggRate ? C.priceFeed.getStEthEthRate() : [0n, true],
+      isRWA() ? C.priceFeed.navShock() : false
     ]);
 
     price = Number(ethers.formatEther(p));
@@ -242,24 +256,30 @@ async function refresh() {
     $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
 
     // Oracle status badge (depeg judged client-side from the live rate)
-    const rateNum = isNative() ? 1 : Number(ethers.formatEther(stRate[0]));
-    const depeg = !isNative() && stRate[1] && rateNum < 0.96;
-    $("stOracle").textContent = !oracleLive ? "FALLBACK" : depeg ? "DEPEG CB" : "Chainlink ✓";
-    $("stOracle").className = !oracleLive ? "warn" : depeg ? "bad" : "good";
-    if (!isNative()) $("simRate").textContent = rateNum.toFixed(3);
+    const rateNum = C.aggRate ? Number(ethers.formatEther(stRate[0])) : 1;
+    const depeg = !!C.aggRate && stRate[1] && rateNum < 0.96;
+    $("stOracle").textContent = !oracleLive ? "FALLBACK"
+      : navShock ? "NAV SHOCK" : depeg ? "DEPEG CB"
+      : isRWA() ? "NAV feed ✓" : "Chainlink ✓";
+    $("stOracle").className = !oracleLive ? "warn" : (navShock || depeg) ? "bad" : "good";
+    if (C.aggRate) $("simRate").textContent = rateNum.toFixed(3);
+    if (C.aggNav) {
+      const nav = await C.aggNav.latestRoundData();
+      $("simNav").textContent = "$" + (Number(nav[1]) / 1e8).toFixed(4);
+    }
 
     // ETH/USD shown in the simulator row (branch price may be derived)
     if (C.aggEth) {
       const rd = await C.aggEth.latestRoundData();
       $("simPrice").textContent = "$" + (Number(rd[1]) / 1e8).toLocaleString("en-US", { maximumFractionDigits: 2 });
     } else {
-      $("simPrice").textContent = fmtUsd(p) + (isNative() ? "" : " (wstETH)");
+      $("simPrice").textContent = fmtUsd(p) + (isNative() ? "" : ` (${collSym()})`);
     }
 
     $("balEth").textContent = wallet ? fmt(ethBal) + " ETH" : "—";
     $("balOrusd").textContent = fmt(orusdBal) + " orUSD";
     $("balOra").textContent = fmt(oraBal) + " ORA";
-    if (C.collToken) $("balWst").textContent = fmt(wstBal) + " wstETH";
+    if (C.collToken) $("balWst").textContent = fmt(wstBal) + " " + collSym();
 
     const active = trove.status === 1n;
     $("troveNone").style.display = active ? "none" : "block";
@@ -302,7 +322,8 @@ function updateOpenPreview(rate) {
   $("openPreview").innerHTML =
     `Fee: <b>${fee.toFixed(2)} orUSD</b> · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>` +
     `Collateral ratio: <b class="${cls}">${icr.toFixed(1)}%</b> — liquidation below 110%` +
-    (borrow < 1800 ? ' · <span class="bad">minimum borrow is 1,800 orUSD</span>' : "");
+    (borrow < 1800 ? ' · <span class="bad">minimum borrow is 1,800 orUSD</span>' : "") +
+    (bcfg().debtCap ? ` · isolated branch: debt cap ${Number(bcfg().debtCap).toLocaleString("en-US")} orUSD` : "");
 }
 
 async function refreshTrovesTable() {
@@ -349,7 +370,7 @@ async function main() {
   ["openColl", "openDebt"].forEach(id => $(id).addEventListener("input", () => updateOpenPreview()));
 
   $("btnWstFaucet").addEventListener("click", () =>
-    tx("wstETH faucet", () => C.collToken.faucet(ethers.parseEther("10"))));
+    tx(collSym() + " faucet", () => C.collToken.faucet(ethers.parseEther(faucetAmt()))));
 
   $("btnOpen").addEventListener("click", async () => {
     const coll = ethers.parseEther($("openColl").value || "0");
@@ -421,6 +442,22 @@ async function main() {
     if (!v || v <= 0) return toast("Enter a valid price");
     setEthUsd(v);
   });
+
+  // NAV simulator (RWA branch): accrue yield, spike (clamped), break the buck
+  document.querySelectorAll("button[data-nav]").forEach(b =>
+    b.addEventListener("click", () => {
+      if (!C.aggNav) return;
+      const v = b.dataset.nav;
+      tx(v === "reset" ? "Reset NAV to $1.05" : "Set NAV ×" + v, async () => {
+        let target = 105000000n; // $1.05, 8 decimals
+        if (v !== "reset") {
+          const rd = await C.aggNav.latestRoundData();
+          target = BigInt(Math.round(Number(rd[1]) * Number(v)));
+        }
+        await (await C.aggNav.setAnswer(target)).wait();
+        return C.priceFeed.fetchPrice(); // apply clamp / shock breaker on-chain
+      });
+    }));
 
   // Depeg simulator: stETH/ETH rate (always settable on testnets)
   document.querySelectorAll("button[data-rate]").forEach(b =>

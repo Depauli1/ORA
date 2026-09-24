@@ -92,6 +92,16 @@
       to exactly 110% and kept open; 0.5% of seized collateral to the caller;
       normal mode only, remainder must stay a valid trove; ETH branch keeps the
       audited v1 TroveManager
+- [x] **Phase 4: RWA branch (mTBILL)** — third collateral branch backed by a
+      tokenized T-bill fund share (`MockTBill`, non-rebasing, NAV-accruing like
+      OUSG/BUIDL); `RWAPriceFeed` NAV oracle with +2%/update upside clamp
+      (manipulation-proof ratchet), sticky break-the-buck shock flag (>2% below
+      the high-water mark) and 72h staleness fallback; **strict isolation
+      enforced twice** — structurally (own pools/SP/TroveManager per branch)
+      and economically (2,000,000 orUSD branch debt cap in
+      `BorrowerOperationsERC20.setDebtCap`, checked on every mint); Phase 2
+      stack reused (TroveManagerV2 soft-liqs, BranchStaking, 500k ORA
+      issuance); ≥3 collateral branches KPI now live on testnet
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 
