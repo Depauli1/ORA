@@ -7,6 +7,7 @@
 const $ = id => document.getElementById(id);
 const Z = "0x0000000000000000000000000000000000000000";
 const MAX_FEE = ethers.parseEther("0.05");
+const GAS_COMP = ethers.parseEther("200"); // refunded on close — repay = debt − 200
 const MCR = 1.1;
 
 const BASE_SEPOLIA = {
@@ -312,6 +313,14 @@ async function refresh() {
       $("tvIcr").textContent = icr.toFixed(1) + "%";
       $("tvIcr").className = icr < 120 ? "bad" : icr < 150 ? "warn" : "good";
       $("tvLiq").textContent = "$" + liqPrice.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      // Close readiness: full debt minus the refunded 200 orUSD gas comp
+      const closeNeed = debt - GAS_COMP;
+      const ready = orusdBal >= closeNeed;
+      $("tvCloseHint").innerHTML = ready
+        ? `close repays <b>${fmt(closeNeed)} orUSD</b> — wallet has ${fmt(orusdBal)} <span class="good">✓</span>`
+        : `close repays <b>${fmt(closeNeed)} orUSD</b> — wallet has ${fmt(orusdBal)} ` +
+          `(<span class="bad">short ${fmt(closeNeed - orusdBal)}</span>: withdraw your SP deposit or repay partially)`;
+      $("btnClose").disabled = !ready;
     }
     updateOpenPreview(rate);
 
@@ -419,8 +428,25 @@ async function main() {
     tx("Borrow orUSD", () => C.borrowerOps.withdrawLUSD(MAX_FEE, adj(), Z, Z)));
   $("btnRepay").addEventListener("click", () =>
     tx("Repay orUSD", () => C.borrowerOps.repayLUSD(adj(), Z, Z)));
-  $("btnClose").addEventListener("click", () =>
-    tx("Close Trove", () => C.borrowerOps.closeTrove()));
+  $("btnClose").addEventListener("click", async () => {
+    if (!wallet) return toast("Connect a wallet first");
+    // Pre-check: closing repays the full debt (minus the 200 orUSD gas comp)
+    // from the wallet — fail with a helpful message instead of a revert.
+    try {
+      const [entire, bal] = await Promise.all([
+        C.troveManager.getEntireDebtAndColl(myAddr()),
+        C.orUSD.balanceOf(myAddr())
+      ]);
+      const need = entire[0] - GAS_COMP;
+      if (bal < need) {
+        return toast(
+          `Closing this Trove needs ${fmt(need)} orUSD in your wallet — you have ${fmt(bal)} ` +
+          `(short ${fmt(need - bal)}). Withdraw your Stability Pool deposit, use Repay to shrink ` +
+          `the debt first, or fund this account with orUSD from another one.`, 12000);
+      }
+    } catch { /* fall through — let the chain report */ }
+    tx("Close Trove", () => C.borrowerOps.closeTrove());
+  });
 
   const spAmt = () => ethers.parseEther($("spAmount").value || "0");
   $("btnSpDeposit").addEventListener("click", () =>
