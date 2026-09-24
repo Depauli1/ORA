@@ -47,6 +47,16 @@ This deploys and wires, in one run:
   depeg circuit breaker at 0.96; since Base Sepolia has no canonical stETH/ETH
   feed, that leg uses a SettableAggregator mock (which doubles as the depeg demo).
   48h staleness timeout; broken/stale feeds fall back to lastGoodPrice.
+- **Phase 2 tokenomics + soft liquidations (wstETH branch)** — `TroveManagerV2`
+  (adds `liquidatePartial`: partial SP offset at a 3% premium for troves in the
+  [105%, 110%) soft band, trove restored to 110% and kept open, 0.5% of seized
+  collateral to the caller), `BranchStaking` (stake ORA → earn the branch's
+  borrow fees in orUSD + redemption fees in wstETH; ORA is pulled via
+  `transferFrom`, so staking needs a one-time approve — the app does this
+  automatically), and `BranchCommunityIssuance` (the deploy script transfers
+  **1,000,000 ORA** from the derived treasury and activates it, locking the cap;
+  wstETH Stability Pool depositors then earn ORA on the yearly-halving curve).
+  The ETH branch keeps the audited v1 TroveManager and classic ORA staking.
 
 Addresses + ABIs are written to `app/deployment-baseSepolia.json` — commit it.
 
@@ -79,3 +89,9 @@ Base Sepolia mode loads `deployment-baseSepolia.json`, reads via
 the sandbox firewall), and signs with MetaMask (auto adds/switches to chain
 84532). Until `deployment-baseSepolia.json` is committed, the switcher shows
 a friendly "not deployed yet" notice.
+
+Phase 2 UI: the Stake ORA card is branch-aware (classic staking on the ETH
+branch, `BranchStaking` with auto-approve on the wstETH branch, fee labels in
+the branch's collateral symbol), Stability Pool cards show the real ORA reward
+on both branches, and the risky-troves table adds a **Soft-liq** button for
+wstETH troves inside the [105%, 110%) band.

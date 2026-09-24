@@ -82,7 +82,16 @@
 - [x] **Phase 1.5: public face** — frontend network switcher (Local / Base
       Sepolia) with MetaMask signing (auto chain add/switch), oracle status
       badge, and a depeg-simulator that trips the on-chain circuit breaker
-- [ ] Branch ORA incentives + per-branch fee distribution (Phase 2 tokenomics)
+- [x] **Phase 2: per-branch tokenomics** — `BranchStaking` (stake ORA, earn the
+      wstETH branch's borrow fees in orUSD + redemption fees in wstETH) and
+      `BranchCommunityIssuance` (1M ORA from treasury, same yearly-halving curve,
+      cap locked at activation) paying ORA to wstETH Stability Pool depositors
+- [x] **Phase 2: soft liquidations** — `TroveManagerV2` on the wstETH branch adds
+      `liquidatePartial`: troves in the soft band [105%, 110%) are partially
+      offset against the SP at a 3% premium (vs ~10% full-liq penalty), restored
+      to exactly 110% and kept open; 0.5% of seized collateral to the caller;
+      normal mode only, remainder must stay a valid trove; ETH branch keeps the
+      audited v1 TroveManager
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 

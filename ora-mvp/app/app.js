@@ -74,7 +74,8 @@ function connectContracts() {
     ? new ethers.Contract(B.ethUsdAggregator, A.settableAggregator, runner) : null;
   C.aggRate = B.stEthEthAggregator
     ? new ethers.Contract(B.stEthEthAggregator, A.settableAggregator, runner) : null;
-  C.troveManager = new ethers.Contract(B.troveManager, A.troveManager, runner);
+  C.troveManager = new ethers.Contract(
+    B.troveManager, B.native ? A.troveManager : (A.troveManagerV2 || A.troveManager), runner);
   C.borrowerOps = new ethers.Contract(
     B.borrowerOperations, B.native ? A.borrowerOperations : A.borrowerOperationsERC20, runner);
   C.stabilityPool = new ethers.Contract(
@@ -83,7 +84,12 @@ function connectContracts() {
   C.collToken = B.native ? null : new ethers.Contract(B.collToken, A.mockWstETH, runner);
   C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
   C.ora = new ethers.Contract(S.oraToken, A.oraToken, runner);
-  C.staking = new ethers.Contract(S.oraStaking, A.oraStaking, runner);
+  // Phase 2: each branch has its own staking pool — ETH branch uses the classic
+  // LQTYStaking (native ETH gains), other branches use BranchStaking (ERC20 gains).
+  C.branchStakingMode = !B.native && !!B.branchStaking;
+  C.staking = C.branchStakingMode
+    ? new ethers.Contract(B.branchStaking, A.branchStaking, runner)
+    : new ethers.Contract(S.oraStaking, A.oraStaking, runner);
 }
 
 function setAccount(name) {
@@ -272,12 +278,12 @@ async function refresh() {
 
     $("spDeposit").textContent = fmt(spDep) + " orUSD";
     $("spEthGain").textContent = fmt(spEth, 5) + " " + collSym();
-    $("spOraGain").textContent = isNative() ? fmt(spOra, 3) + " ORA" : "— (Phase 2)";
+    $("spOraGain").textContent = fmt(spOra, 3) + " ORA";
     $("spShare").textContent = spTotal > 0n
       ? (Number(spDep) / Number(spTotal) * 100).toFixed(2) + "%" : "0%";
 
     $("stkAmount").textContent = fmt(stake) + " ORA";
-    $("stkEth").textContent = fmt(stkEth, 5) + " ETH";
+    $("stkEth").textContent = fmt(stkEth, 5) + " " + (C.branchStakingMode ? collSym() : "ETH");
     $("stkOrusd").textContent = fmt(stkOrusd, 3) + " orUSD";
 
     await refreshTrovesTable();
@@ -307,18 +313,27 @@ async function refreshTrovesTable() {
     const owner = r[0], debt = r[1], coll = r[2];
     const icr = Number(coll) * price / Number(debt) * 100;
     const liq = icr < MCR * 100;
+    // Phase 2 (non-ETH branches): troves in the soft band [105%, 110%) can be
+    // partially liquidated at a 3% premium instead of fully at ~10%
+    const soft = !isNative() && liq && icr >= 105;
     const tr = document.createElement("tr");
     if (liq) tr.className = "liq";
     tr.innerHTML =
       `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}</td>` +
       `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
       `<td class="${liq ? "bad" : icr < 150 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
-      `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button></td>`;
+      `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button>` +
+      (soft ? ` <button class="mini" data-softliq="${owner}" title="Partial liquidation: restores the trove to 110% at a 3% premium">Soft-liq</button>` : "") +
+      `</td>`;
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll("button[data-liq]").forEach(b =>
     b.addEventListener("click", () =>
       tx("Liquidate " + short(b.dataset.liq), () => C.troveManager.liquidate(b.dataset.liq)))
+  );
+  tbody.querySelectorAll("button[data-softliq]").forEach(b =>
+    b.addEventListener("click", () =>
+      tx("Soft-liquidate " + short(b.dataset.softliq), () => C.troveManager.liquidatePartial(b.dataset.softliq)))
   );
 }
 
@@ -375,7 +390,15 @@ async function main() {
 
   const stkAmt = () => ethers.parseEther($("stkInput").value || "0");
   $("btnStake").addEventListener("click", () =>
-    tx("Stake ORA", () => C.staking.stake(stkAmt())));
+    tx("Stake ORA", async () => {
+      const amt = stkAmt();
+      // BranchStaking pulls ORA via transferFrom — approve once if needed
+      if (C.branchStakingMode) {
+        const allowance = await C.ora.allowance(myAddr(), C.staking.target);
+        if (allowance < amt) await (await C.ora.approve(C.staking.target, ethers.MaxUint256)).wait();
+      }
+      return C.staking.stake(amt);
+    }));
   $("btnUnstake").addEventListener("click", () =>
     tx("Unstake ORA", () => C.staking.unstake(stkAmt())));
   $("btnFaucet").addEventListener("click", () => {

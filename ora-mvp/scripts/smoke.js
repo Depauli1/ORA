@@ -33,7 +33,7 @@ async function main() {
   const wst = new ethers.Contract(B2.collToken, dep.abis.mockWstETH, alice);
   const bo2 = new ethers.Contract(B2.borrowerOperations, dep.abis.borrowerOperationsERC20, alice);
   const sp2 = new ethers.Contract(B2.stabilityPool, dep.abis.stabilityPoolERC20, alice);
-  const tm2 = new ethers.Contract(B2.troveManager, dep.abis.troveManager, carol);
+  const tm2 = new ethers.Contract(B2.troveManager, dep.abis.troveManagerV2, carol);
   const pf1 = new ethers.Contract(dep.branches.ETH.priceFeed, dep.abis.priceFeed, provider);
   const pf2 = new ethers.Contract(B2.priceFeed, dep.abis.priceFeedWstETH, treasury);
   const aggRate = new ethers.Contract(B2.stEthEthAggregator, dep.abis.settableAggregator, treasury);
@@ -94,7 +94,72 @@ async function main() {
   await (await pf2.fetchPrice()).wait();
   console.log("[stale] feed refreshed — oracleLive:", await pf2.oracleLive());
 
-  console.log("\nPHASE 1.5 SMOKE TEST PASSED ✓");
+  // ===== PHASE 2 =====
+
+  // --- 2a. SP depositors on the wstETH branch earn ORA (BranchCommunityIssuance) ---
+  const ora = new ethers.Contract(dep.shared.oraToken, dep.abis.oraToken, alice);
+  await provider.send("evm_increaseTime", [3600]);
+  await provider.send("evm_mine", []);
+  const oraBefore = await ora.balanceOf(aliceAddr);
+  await (await sp2.provideToSP(E("10"), Z)).wait(); // any SP op triggers issuance + pays accrued ORA
+  const oraGain = await ora.balanceOf(aliceAddr) - oraBefore;
+  console.log("[phase2] Alice SP ORA reward paid after 1h:", f(oraGain));
+  if (oraGain === 0n) throw new Error("expected ORA gain for SP depositor");
+
+  // --- 2b. BranchStaking: stake ORA, earn wstETH-branch fees ---
+  const staking = new ethers.Contract(B2.branchStaking, dep.abis.branchStaking, alice);
+  await (await ora.connect(treasury).transfer(aliceAddr, E("100"))).wait();
+  await (await ora.approve(B2.branchStaking, ethers.MaxUint256)).wait();
+  await (await staking.stake(E("100"))).wait();
+  console.log("[phase2] Alice staked 100 ORA — total staked:", f(await staking.totalLQTYStaked()));
+  await (await bo2.withdrawLUSD(E("0.05"), E("500"), Z, Z)).wait(); // borrow fee flows to BranchStaking
+  const usdGain = await staking.getPendingLUSDGain(aliceAddr);
+  console.log("[phase2] pending orUSD fee gain from borrow:", f(usdGain));
+  if (usdGain === 0n) throw new Error("expected orUSD fee gain for staker");
+  const usdBefore = await usd.balanceOf(aliceAddr);
+  await (await staking.unstake(E("100"))).wait();
+  console.log("[phase2] unstaked — orUSD fee claimed:", f(await usd.balanceOf(aliceAddr) - usdBefore),
+    "| ORA back:", f(await ora.balanceOf(aliceAddr)));
+
+  // --- 2c. Soft liquidation: partial offset restores trove to 110% at only a 3% premium ---
+  const aggEth = new ethers.Contract(B2.ethUsdAggregator, dep.abis.settableAggregator, treasury);
+  const wstC = wst.connect(carol);
+  const bo2C = bo2.connect(carol);
+  await (await wstC.faucet(E("2.3"))).wait();
+  await (await wstC.approve(B2.borrowerOperations, ethers.MaxUint256)).wait();
+  await (await bo2C.openTrove(E("0.05"), E("4700"), E("2.3"), Z, Z)).wait();
+  const carolAddr = await carol.getAddress();
+  console.log("[softliq] Carol trove: 2.3 wstETH / debt", f((await tm2.getEntireDebtAndColl(carolAddr))[0]),
+    "— ICR:", (Number(await tm2.getCurrentICR(carolAddr, E("2400"))) / 1e16).toFixed(1) + "%");
+
+  // ETH dips $2000 -> $1908, wstETH/USD = 1908 * 1.2 = $2289.60; Carol lands in the soft band [105%,110%)
+  await (await aggEth.setAnswer(1908n * 10n ** 8n)).wait();
+  await (await pf2.fetchPrice()).wait();
+  const px = await pf2.getPrice();
+  const icrBefore = await tm2.getCurrentICR(carolAddr, px);
+  console.log("[softliq] ETH -> $1908 | wstETH/USD:", f(px),
+    "| Carol ICR:", (Number(icrBefore) / 1e16).toFixed(2) + "%",
+    "| branch TCR:", (Number(await tm2.getTCR(px)) / 1e16).toFixed(1) + "%");
+
+  const wstBefore = await wst.balanceOf(aliceAddr);
+  await (await tm2.connect(alice).liquidatePartial(carolAddr)).wait();
+  const after = await tm2.getEntireDebtAndColl(carolAddr);
+  const icrAfter = await tm2.getCurrentICR(carolAddr, px);
+  console.log("[softliq] partial liquidation ✓ — Carol still active:", (await tm2.getTroveStatus(carolAddr)) === 1n,
+    "| debt:", f(after[0]), "| coll:", f(after[1]),
+    "| ICR restored to:", (Number(icrAfter) / 1e16).toFixed(2) + "%");
+  const callerReward = await wst.balanceOf(aliceAddr) - wstBefore;
+  console.log("[softliq] Alice caller reward (0.5% of seized coll):", Number(ethers.formatEther(callerReward)).toFixed(4), "wstETH");
+  if ((await tm2.getTroveStatus(carolAddr)) !== 1n) throw new Error("trove should stay active");
+  if (icrAfter < 1099000000000000000n) throw new Error("ICR not restored to ~110%");
+  if (callerReward === 0n) throw new Error("expected caller reward");
+
+  // restore ETH price
+  await (await aggEth.setAnswer(2000n * 10n ** 8n)).wait();
+  await (await pf2.fetchPrice()).wait();
+  console.log("[softliq] ETH price restored to $2000");
+
+  console.log("\nPHASE 1.5 + PHASE 2 SMOKE TEST PASSED ✓");
 }
 
 main().catch(e => { console.error("SMOKE TEST FAILED:", e.shortMessage || e.message); process.exit(1); });

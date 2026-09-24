@@ -113,7 +113,7 @@ async function main() {
   // ---------------- Branch 2: wstETH (ERC20 collateral) ----------------
   console.log("\n— Branch 2: wstETH —");
   const sortedTroves2 = await deploy("SortedTroves");
-  const troveManager2 = await deploy("TroveManager"); // same audited bytecode
+  const troveManager2 = await deploy("TroveManagerV2"); // Phase 2: soft liquidations
   const activePool2 = await deploy("ActivePoolERC20");
   const stabilityPool2 = await deploy("StabilityPoolERC20");
   const gasPool2 = await deploy("GasPool");
@@ -122,8 +122,8 @@ async function main() {
   const borrowerOperations2 = await deploy("BorrowerOperationsERC20");
   const hintHelpers2 = await deploy("HintHelpers");
   const multiTroveGetter2 = await deploy("MultiTroveGetter", await a(troveManager2), await a(sortedTroves2));
-  const feeReceiver2 = await deploy("BranchFeeReceiver");
-  const zeroIssuance2 = await deploy("ZeroCommunityIssuance");
+  const branchStaking2 = await deploy("BranchStaking");        // Phase 2: ORA staking earns branch fees
+  const branchIssuance2 = await deploy("BranchCommunityIssuance"); // Phase 2: ORA rewards for SP depositors
 
   console.log("\n— Wiring branch 2 (wstETH) —");
   // Register the branch on orUSD (the Phase 1 core change)
@@ -135,19 +135,19 @@ async function main() {
     await a(borrowerOperations2), await a(activePool2), await a(defaultPool2),
     await a(stabilityPool2), await a(gasPool2), await a(collSurplusPool2),
     await a(priceFeed2), await a(orUSD), await a(sortedTroves2),
-    await a(oraToken), await a(feeReceiver2))).wait();
+    await a(oraToken), await a(branchStaking2))).wait();
 
   // setCollToken must precede setAddresses (which renounces ownership)
   await (await borrowerOperations2.setCollToken(await a(wstETH))).wait();
   await (await borrowerOperations2.setAddresses(
     await a(troveManager2), await a(activePool2), await a(defaultPool2),
     await a(stabilityPool2), await a(gasPool2), await a(collSurplusPool2),
-    await a(priceFeed2), await a(sortedTroves2), await a(orUSD), await a(feeReceiver2))).wait();
+    await a(priceFeed2), await a(sortedTroves2), await a(orUSD), await a(branchStaking2))).wait();
 
   await (await stabilityPool2.setCollToken(await a(wstETH))).wait();
   await (await stabilityPool2.setAddresses(
     await a(borrowerOperations2), await a(troveManager2), await a(activePool2),
-    await a(orUSD), await a(sortedTroves2), await a(priceFeed2), await a(zeroIssuance2))).wait();
+    await a(orUSD), await a(sortedTroves2), await a(priceFeed2), await a(branchIssuance2))).wait();
 
   await (await activePool2.setAddresses(
     await a(borrowerOperations2), await a(troveManager2), await a(stabilityPool2),
@@ -158,8 +158,18 @@ async function main() {
     await a(borrowerOperations2), await a(troveManager2), await a(activePool2))).wait();
   await (await collSurplusPool2.setCollToken(await a(wstETH))).wait();
   await (await hintHelpers2.setAddresses(await a(sortedTroves2), await a(troveManager2))).wait();
-  await (await feeReceiver2.setAddresses(await a(troveManager2), await a(borrowerOperations2))).wait();
-  console.log("  branch 2 wired — WstETHPriceFeed live");
+  // Phase 2: BranchStaking — setCollToken must precede setAddresses (which renounces ownership)
+  await (await branchStaking2.setCollToken(await a(wstETH))).wait();
+  await (await branchStaking2.setAddresses(
+    await a(oraToken), await a(orUSD), await a(troveManager2),
+    await a(borrowerOperations2), await a(activePool2))).wait();
+
+  // Phase 2: BranchCommunityIssuance — fund 1,000,000 ORA from treasury, then activate (locks cap)
+  await (await branchIssuance2.setAddresses(await a(oraToken), await a(stabilityPool2))).wait();
+  await (await oraToken.connect(treasury).transfer(
+    await a(branchIssuance2), ethers.parseEther("1000000"))).wait();
+  await (await branchIssuance2.activate()).wait();
+  console.log("  branch 2 wired — BranchStaking + 1M ORA issuance live");
 
   // ---------------- Export ----------------
   const abi = name => {
@@ -223,7 +233,8 @@ async function main() {
         borrowerOperations: await a(borrowerOperations2),
         hintHelpers: await a(hintHelpers2),
         multiTroveGetter: await a(multiTroveGetter2),
-        feeReceiver: await a(feeReceiver2)
+        branchStaking: await a(branchStaking2),
+        communityIssuance: await a(branchIssuance2)
       }
     },
     abis: {
@@ -242,7 +253,9 @@ async function main() {
       hintHelpers: abi("HintHelpers"),
       multiTroveGetter: abi("MultiTroveGetter"),
       mockWstETH: abi("MockWstETH"),
-      feeReceiver: abi("BranchFeeReceiver")
+      troveManagerV2: abi("TroveManagerV2"),
+      branchStaking: abi("BranchStaking"),
+      branchCommunityIssuance: abi("BranchCommunityIssuance")
     }
   };
 

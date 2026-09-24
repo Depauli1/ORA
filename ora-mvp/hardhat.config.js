@@ -37,9 +37,21 @@ function deployerKey() {
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.6.11",
-    settings: {
-      optimizer: { enabled: true, runs: 100 }
+    compilers: [{
+      version: "0.6.11",
+      settings: {
+        optimizer: { enabled: true, runs: 100 }
+      }
+    }],
+    overrides: {
+      // TroveManagerV2 adds soft liquidations on top of an already size-capped
+      // contract; runs:1 keeps it under the 24KB limit.
+      "contracts/branches/TroveManagerV2.sol": {
+        version: "0.6.11",
+        settings: {
+          optimizer: { enabled: true, runs: 1 }
+        }
+      }
     }
   },
   networks: {
