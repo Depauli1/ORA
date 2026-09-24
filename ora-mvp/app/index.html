@@ -21,6 +21,7 @@
     <select id="networkSelect">
       <option value="local">Local testnet</option>
       <option value="baseSepolia">Base Sepolia</option>
+      <option value="base">Base (mainnet)</option>
     </select>
     <button id="btnConnect" style="display:none">Connect wallet</button>
     <select id="accountSelect">
@@ -116,6 +117,19 @@
     </div>
   </div>
 
+  <!-- REDEEM (hard peg floor) -->
+  <div class="card">
+    <h2>Redeem orUSD <span class="hint">the $1 hard-peg floor — swap orUSD for $1 of <span class="collsym">ETH</span></span></h2>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="redeemAmount" type="number" value="100" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnRedeem">Redeem</button>
+    </div>
+    <div class="hint" style="margin-top:6px">Redeems against the lowest-collateral troves at face value, minus the
+      redemption fee (0.5% floor + rate). Disabled during the 14-day bootstrap period after launch.</div>
+  </div>
+
   <!-- ORA STAKING -->
   <div class="card">
     <h2>Stake ORA <span class="hint">earn 100% of this branch's fees</span></h2>
@@ -123,7 +137,7 @@
       <div><label>My Stake</label><b id="stkAmount">—</b></div>
       <div><label><span class="collsym">ETH</span> Fees Earned</label><b id="stkEth">—</b></div>
       <div><label>orUSD Fees Earned</label><b id="stkOrusd">—</b></div>
-      <div><label>Faucet</label><button class="mini" id="btnFaucet">Get 100 test ORA</button></div>
+      <div id="faucetRow"><label>Faucet</label><button class="mini" id="btnFaucet">Get 100 test ORA</button></div>
     </div>
     <div class="row">
       <div class="field"><label>ORA amount</label><input id="stkInput" type="number" value="50" min="0" step="10" /></div>
@@ -134,9 +148,10 @@
     </div>
   </div>
 
-  <!-- MARKET SIMULATOR + RISKY TROVES -->
+  <!-- MARKET SIMULATOR (testnet only) + RISKY TROVES -->
   <div class="card wide">
-    <h2>Market Simulator <span class="hint">testnet oracle control — crash the market, run liquidations</span></h2>
+    <h2><span id="simTitle">Market Simulator</span> <span class="hint" id="simSub">testnet oracle control — crash the market, run liquidations</span></h2>
+    <div id="simTools">
     <div class="simrow" id="priceRow">
       <span>ETH/USD:</span> <b id="simPrice">—</b>
       <button class="mini" data-bump="-10">−10%</button>
@@ -163,17 +178,19 @@
       <button class="mini" data-nav="reset">Reset $1.05</button>
       <span class="hint">drops &gt;2% below the high-water mark flag a NAV shock</span>
     </div>
+    </div><!-- /simTools -->
     <table id="trovesTable">
       <thead><tr><th>Owner</th><th>Collateral</th><th>Debt</th><th>ICR</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
+    <button class="mini" id="btnMoreTroves" style="display:none;margin-top:8px">Load 50 more troves</button>
   </div>
 </main>
 
 <div id="toast"></div>
-<footer>ORA Protocol MVP — Liquity-engine core, modern stack. ETH + wstETH collateral branches · Chainlink oracle adapters with depeg circuit breaker · local chain 31337 / Base Sepolia 84532. Not financial advice; demo keys are public.</footer>
+<footer>ORA Protocol — Liquity-engine core. ETH + wstETH + mTBILL (RWA) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
-<script src="app.js?v=phase4"></script>
+<script src="app.js?v=mainnet1"></script>
 </body>
 </html>

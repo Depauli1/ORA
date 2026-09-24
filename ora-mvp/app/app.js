@@ -10,10 +10,21 @@ const MAX_FEE = ethers.parseEther("0.05");
 const GAS_COMP = ethers.parseEther("200"); // refunded on close — repay = debt − 200
 const MCR = 1.1;
 
-const BASE_SEPOLIA = {
-  chainIdHex: "0x14a34", // 84532
-  rpc: "https://sepolia.base.org",
-  explorer: "https://sepolia.basescan.org"
+// Network registry. `testnet` gates simulators/faucets; `local` additionally
+// enables the built-in demo accounts. Mainnet entries are wallet-only and
+// show no test tooling at all.
+const NETWORKS = {
+  local: { label: "Local demo chain", testnet: true, local: true, file: "deployment.json" },
+  baseSepolia: {
+    label: "Base Sepolia", testnet: true, local: false, file: "deployment-baseSepolia.json",
+    chainIdHex: "0x14a34", chainName: "Base Sepolia", rpc: "https://sepolia.base.org",
+    explorer: "https://sepolia.basescan.org"
+  },
+  base: {
+    label: "Base", testnet: false, local: false, file: "deployment-base.json",
+    chainIdHex: "0x2105", chainName: "Base", rpc: "https://mainnet.base.org",
+    explorer: "https://basescan.org"
+  }
 };
 
 // Well-known hardhat testnet keys (public, local demo only)
@@ -27,6 +38,8 @@ const TREASURY_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c3
 let provider, wallet = null, treasury = null, dep, C = {}, price = 0, busy = false;
 let branch = "ETH";
 let netMode = "local";
+let troveRows = 50; // risky-troves pagination window
+const curNet = () => NETWORKS[netMode];
 
 const fmt = (v, d = 2) =>
   Number(ethers.formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: d });
@@ -102,6 +115,8 @@ function connectContracts() {
   C.stabilityPool = new ethers.Contract(
     B.stabilityPool, B.native ? A.stabilityPool : A.stabilityPoolERC20, runner);
   C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, runner);
+  C.sortedTroves = new ethers.Contract(B.sortedTroves, A.sortedTroves, runner);
+  C.hintHelpers = new ethers.Contract(B.hintHelpers, A.hintHelpers, runner);
   C.collToken = B.native ? null
     : new ethers.Contract(B.collToken, B.rwa ? A.mockTBill : A.mockWstETH, runner);
   C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
@@ -129,12 +144,20 @@ function setBranch(name) {
   document.querySelectorAll(".tab").forEach(t =>
     t.classList.toggle("active", t.dataset.branch === name));
   document.querySelectorAll(".collsym").forEach(el => (el.textContent = collSym()));
-  $("btnWstFaucet").style.display = isNative() ? "none" : "inline-block";
+  const testnet = curNet().testnet;
+  // Mock-collateral faucets exist only on testnets
+  $("btnWstFaucet").style.display = !isNative() && testnet ? "inline-block" : "none";
   $("btnWstFaucet").textContent = `Get ${Number(faucetAmt()).toLocaleString("en-US")} test ${collSym()}`;
   $("balWst").style.display = isNative() ? "none" : "inline";
-  $("depegRow").style.display = !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
-  $("navRow").style.display = isRWA() ? "flex" : "none";
-  $("priceRow").style.display = isRWA() ? "none" : "flex";
+  // Market/oracle simulators are testnet tooling — never shown on mainnet
+  $("simTools").style.display = testnet ? "" : "none";
+  $("simTitle").textContent = testnet ? "Market Simulator" : "Risky Troves";
+  $("simSub").textContent = testnet
+    ? "testnet oracle control — crash the market, run liquidations"
+    : "troves nearest liquidation — anyone can liquidate below 110%";
+  $("depegRow").style.display = testnet && !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
+  $("navRow").style.display = testnet && isRWA() ? "flex" : "none";
+  $("priceRow").style.display = !testnet || isRWA() ? "none" : "flex";
   // sensible open-trove defaults per collateral
   const defs = isRWA() ? ["10000", "5000"] : isNative() ? ["5", "4000"] : ["6", "6000"];
   $("openColl").value = defs[0];
@@ -151,31 +174,32 @@ function updateSimControls() {
 
 async function setNetwork(mode) {
   try {
-    const local = mode !== "baseSepolia";
-    if (!local) {
-      const r = await fetch("deployment-baseSepolia.json?ts=" + Date.now());
+    const net = NETWORKS[mode] || NETWORKS.local;
+    if (!net.local) {
+      const r = await fetch(net.file + "?ts=" + Date.now());
       if (!r.ok) {
-        toast("Base Sepolia not deployed yet — run the DEPLOY_BASE_SEPOLIA.md runbook, commit deployment-baseSepolia.json, and reload.", 9000);
+        toast(net.label + " not deployed yet — run the deployment runbook, commit " + net.file + ", and reload.", 9000);
         $("networkSelect").value = netMode;
         return;
       }
       dep = await r.json();
-      netMode = "baseSepolia";
-      provider = new ethers.JsonRpcProvider(BASE_SEPOLIA.rpc, 84532, { staticNetwork: true });
+      netMode = mode;
+      provider = new ethers.JsonRpcProvider(net.rpc, parseInt(net.chainIdHex, 16), { staticNetwork: true });
       wallet = null; treasury = null;
       $("accountSelect").style.display = "none";
       $("btnConnect").style.display = "inline-block";
-      $("btnFaucet").disabled = true;
       $("addr").textContent = "read-only — connect a wallet to transact";
     } else {
-      dep = await (await fetch("deployment.json?ts=" + Date.now())).json();
-      netMode = "local";
+      dep = await (await fetch(net.file + "?ts=" + Date.now())).json();
+      netMode = mode;
       provider = new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true });
       treasury = new ethers.NonceManager(new ethers.Wallet(TREASURY_KEY, provider));
       $("accountSelect").style.display = "inline-block";
       $("btnConnect").style.display = "none";
-      $("btnFaucet").disabled = false;
     }
+    // The ORA faucet is a local-chain treasury transfer only
+    $("btnFaucet").disabled = !net.local;
+    $("faucetRow").style.display = net.local ? "" : "none";
 
     // Guard against stale/partial deployment files (e.g. cached from an older
     // phase, or a public deployment made before newer branches existed).
@@ -196,23 +220,24 @@ async function setNetwork(mode) {
 }
 
 async function connectWallet() {
-  if (!window.ethereum) return toast("No wallet extension found — install MetaMask (or a compatible wallet) to use Base Sepolia.", 8000);
+  const net = curNet();
+  if (!window.ethereum) return toast(`No wallet extension found — install MetaMask (or a compatible wallet) to use ${net.label}.`, 8000);
   try {
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: BASE_SEPOLIA.chainIdHex }]
+        params: [{ chainId: net.chainIdHex }]
       });
     } catch (err) {
       if (err.code === 4902) {
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
           params: [{
-            chainId: BASE_SEPOLIA.chainIdHex,
-            chainName: "Base Sepolia",
-            rpcUrls: [BASE_SEPOLIA.rpc],
+            chainId: net.chainIdHex,
+            chainName: net.chainName,
+            rpcUrls: [net.rpc],
             nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-            blockExplorerUrls: [BASE_SEPOLIA.explorer]
+            blockExplorerUrls: [net.explorer]
           }]
         });
       } else { throw err; }
@@ -226,7 +251,7 @@ async function connectWallet() {
     connectContracts();
     $("addr").textContent = wallet.address;
     $("btnConnect").textContent = short(wallet.address);
-    toast("✓ Wallet connected to Base Sepolia");
+    toast("✓ Wallet connected to " + curNet().label);
     await refresh();
   } catch (e) {
     toast("Wallet connection failed: " + reason(e), 8000);
@@ -234,6 +259,38 @@ async function connectWallet() {
 }
 
 // Ensure the branch BorrowerOperations may pull our collateral tokens
+/* ---------- sorted-troves hints ----------
+ * With address(0) hints SortedTroves walks the whole list on-chain — fine
+ * with 10 troves, ruinous gas with thousands. Compute a near-exact insert
+ * position off-chain first (free view calls), as mainnet frontends must. */
+async function getInsertHints(newColl, newDebt) {
+  try {
+    if (newDebt <= 0n || newColl <= 0n) return [Z, Z];
+    const nicr = (newColl * 10n ** 20n) / newDebt; // NICR is 1e20-scaled
+    const size = await C.sortedTroves.getSize();
+    if (size <= 1n) return [Z, Z];
+    const trials = BigInt(Math.min(15 * Math.ceil(Math.sqrt(Number(size))), 3000));
+    const [approx] = await C.hintHelpers.getApproxHint(nicr, trials, 42n);
+    const pos = await C.sortedTroves.findInsertPosition(nicr, approx, approx);
+    return [pos[0], pos[1]];
+  } catch (e) {
+    console.warn("hint computation failed, falling back to zero hints", e);
+    return [Z, Z]; // contracts still succeed, just cost more gas
+  }
+}
+
+// Hints for adjusting the caller's existing trove by (dColl, dDebt) deltas.
+async function adjustHints(dColl, dDebt) {
+  const e = await C.troveManager.getEntireDebtAndColl(myAddr());
+  return getInsertHints(e[1] + dColl, e[0] + dDebt);
+}
+
+// Net debt increase for a borrow: amount + borrowing fee (with decay).
+async function borrowWithFee(amount) {
+  const rate = await C.troveManager.getBorrowingRateWithDecay();
+  return amount + (amount * rate) / 10n ** 18n;
+}
+
 async function ensureAllowance(needed) {
   const allowance = await C.collToken.allowance(myAddr(), bcfg().borrowerOperations);
   if (allowance < needed) {
@@ -358,7 +415,8 @@ function updateOpenPreview(rate) {
 }
 
 async function refreshTrovesTable() {
-  const rows = await C.multiGetter.getMultipleSortedTroves(0, 50);
+  const rows = await C.multiGetter.getMultipleSortedTroves(0, troveRows);
+  $("btnMoreTroves").style.display = rows.length >= troveRows ? "inline-block" : "none";
   const tbody = $("trovesTable").querySelector("tbody");
   tbody.innerHTML = "";
   for (const r of rows) {
@@ -397,7 +455,8 @@ async function main() {
   $("btnConnect").addEventListener("click", connectWallet);
   $("accountSelect").addEventListener("change", e => { setAccount(e.target.value); refresh(); });
   document.querySelectorAll(".tab").forEach(t =>
-    t.addEventListener("click", () => { setBranch(t.dataset.branch); refresh(); }));
+    t.addEventListener("click", () => { troveRows = 50; setBranch(t.dataset.branch); refresh(); }));
+  $("btnMoreTroves").addEventListener("click", () => { troveRows += 50; refreshTrovesTable(); });
   ["openColl", "openDebt"].forEach(id => $(id).addEventListener("input", () => updateOpenPreview()));
 
   $("btnWstFaucet").addEventListener("click", () =>
@@ -406,31 +465,52 @@ async function main() {
   $("btnOpen").addEventListener("click", async () => {
     const coll = ethers.parseEther($("openColl").value || "0");
     const debt = ethers.parseEther($("openDebt").value || "0");
+    if (!wallet) return toast("Connect a wallet first");
     if (isNative()) {
-      tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, Z, Z, { value: coll }));
+      tx("Open Trove", async () => {
+        const [up, low] = await getInsertHints(coll, (await borrowWithFee(debt)) + GAS_COMP);
+        return C.borrowerOps.openTrove(MAX_FEE, debt, up, low, { value: coll });
+      });
     } else {
-      if (!wallet) return toast("Connect a wallet first");
       try { await ensureAllowance(coll); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
-      tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, coll, Z, Z));
+      tx("Open Trove", async () => {
+        const [up, low] = await getInsertHints(coll, (await borrowWithFee(debt)) + GAS_COMP);
+        return C.borrowerOps.openTrove(MAX_FEE, debt, coll, up, low);
+      });
     }
   });
 
   const adj = () => ethers.parseEther($("adjAmount").value || "0");
   $("btnAddColl").addEventListener("click", async () => {
+    if (!wallet) return toast("Connect a wallet first");
     if (isNative()) {
-      tx("Add collateral", () => C.borrowerOps.addColl(Z, Z, { value: adj() }));
+      tx("Add collateral", async () => {
+        const [up, low] = await adjustHints(adj(), 0n);
+        return C.borrowerOps.addColl(up, low, { value: adj() });
+      });
     } else {
-      if (!wallet) return toast("Connect a wallet first");
       try { await ensureAllowance(adj()); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
-      tx("Add collateral", () => C.borrowerOps.addColl(adj(), Z, Z));
+      tx("Add collateral", async () => {
+        const [up, low] = await adjustHints(adj(), 0n);
+        return C.borrowerOps.addColl(adj(), up, low);
+      });
     }
   });
   $("btnWithdrawColl").addEventListener("click", () =>
-    tx("Withdraw collateral", () => C.borrowerOps.withdrawColl(adj(), Z, Z)));
+    tx("Withdraw collateral", async () => {
+      const [up, low] = await adjustHints(-adj(), 0n);
+      return C.borrowerOps.withdrawColl(adj(), up, low);
+    }));
   $("btnBorrowMore").addEventListener("click", () =>
-    tx("Borrow orUSD", () => C.borrowerOps.withdrawLUSD(MAX_FEE, adj(), Z, Z)));
+    tx("Borrow orUSD", async () => {
+      const [up, low] = await adjustHints(0n, await borrowWithFee(adj()));
+      return C.borrowerOps.withdrawLUSD(MAX_FEE, adj(), up, low);
+    }));
   $("btnRepay").addEventListener("click", () =>
-    tx("Repay orUSD", () => C.borrowerOps.repayLUSD(adj(), Z, Z)));
+    tx("Repay orUSD", async () => {
+      const [up, low] = await adjustHints(0n, -adj());
+      return C.borrowerOps.repayLUSD(adj(), up, low);
+    }));
   $("btnClose").addEventListener("click", async () => {
     if (!wallet) return toast("Connect a wallet first");
     // Pre-check: closing repays the full debt (minus the 200 orUSD gas comp)
@@ -449,6 +529,27 @@ async function main() {
       }
     } catch { /* fall through — let the chain report */ }
     tx("Close Trove", () => C.borrowerOps.closeTrove());
+  });
+
+  // Redemption: the $1 hard-peg floor. Burns orUSD against the riskiest
+  // troves at face value (minus the redemption fee). Full hint pipeline.
+  $("btnRedeem").addEventListener("click", () => {
+    const amt = ethers.parseEther($("redeemAmount").value || "0");
+    if (amt === 0n) return toast("Enter an orUSD amount to redeem");
+    tx("Redeem orUSD", async () => {
+      const p = await C.priceFeed.getPrice();
+      const [first, partialNICR, truncated] = await C.hintHelpers.getRedemptionHints(amt, p, 0);
+      if (truncated === 0n) throw new Error("nothing redeemable at this amount");
+      let up = Z, low = Z;
+      try {
+        const size = await C.sortedTroves.getSize();
+        const trials = BigInt(Math.min(15 * Math.ceil(Math.sqrt(Number(size))), 3000));
+        const [approx] = await C.hintHelpers.getApproxHint(partialNICR, trials, 42n);
+        [up, low] = await C.sortedTroves.findInsertPosition(partialNICR, approx, approx);
+      } catch { /* zero hints still work, just cost more gas */ }
+      if (truncated < amt) toast(`Redeeming ${fmt(truncated)} orUSD (amount truncated to full troves)`, 6000);
+      return C.troveManager.redeemCollateral(truncated, first, up, low, partialNICR, 0, MAX_FEE);
+    });
   });
 
   const spAmt = () => ethers.parseEther($("spAmount").value || "0");
