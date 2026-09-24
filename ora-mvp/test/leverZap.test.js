@@ -37,9 +37,9 @@ describe("LeverZap (one-click leverage)", () => {
   describe("access control", () => {
     it("only the owner can leverOpen / leverClose / exec", async () => {
       const { zap, carol } = await loadFixture(zapFixture);
-      await expect(zap.connect(carol).leverOpen(E("0.05"), 6000, 6, { value: E("1") }))
+      await expect(zap.connect(carol).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("1") }))
         .to.be.revertedWith("LeverZap: caller is not owner");
-      await expect(zap.connect(carol).leverClose())
+      await expect(zap.connect(carol).leverClose(2000))
         .to.be.revertedWith("LeverZap: caller is not owner");
       await expect(zap.connect(carol).exec(carol.address, "0x", 0))
         .to.be.revertedWith("LeverZap: caller is not owner");
@@ -49,25 +49,40 @@ describe("LeverZap (one-click leverage)", () => {
   describe("parameter guards", () => {
     it("rejects zero deposit, LTV out of (0, 80%], too-small first borrow, double open", async () => {
       const { zap, bob } = await loadFixture(zapFixture);
-      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6))
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000))
         .to.be.revertedWith("LeverZap: no ETH sent");
-      await expect(zap.connect(bob).leverOpen(E("0.05"), 0, 6, { value: E("2") }))
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 0, 6, 2000, { value: E("2") }))
         .to.be.revertedWith("LeverZap: LTV must be in (0, 80%]");
-      await expect(zap.connect(bob).leverOpen(E("0.05"), 8001, 6, { value: E("2") }))
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 8001, 6, 2000, { value: E("2") }))
         .to.be.revertedWith("LeverZap: LTV must be in (0, 80%]");
       // 0.5 ETH * $2000 * 60% = 600 orUSD < 1800 minimum
-      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, { value: E("0.5") }))
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("0.5") }))
         .to.be.revertedWith("LeverZap: deposit too small for min 1800 orUSD debt");
-      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, { value: E("2") });
-      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, { value: E("2") }))
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") });
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") }))
         .to.be.revertedWith("LeverZap: position already open");
+    });
+
+    it("slippage guard: caps TOTAL equity lost to swap costs across the atomic op", async () => {
+      const { zap, bob } = await loadFixture(zapFixture);
+      // demo pool depth costs ~11% of equity on a 2.5x open -> a 2% budget must revert
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 200, { value: E("2") }))
+        .to.be.revertedWith("LeverZap: slippage exceeded");
+      await expect(zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 10000, { value: E("2") }))
+        .to.be.revertedWith("LeverZap: bad slippage");
+      // nothing partial happened — position can still open within a sane budget
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") });
+      const [, , , status] = await zap.position();
+      expect(status).to.equal(1n);
+      await expect(zap.connect(bob).leverClose(10000)).to.be.revertedWith("LeverZap: bad slippage");
+      await zap.connect(bob).leverClose(2000);
     });
   });
 
   describe("leverOpen", () => {
     it("levers 2 ETH toward the ~2.5x target at the chosen rate", async () => {
       const { zap, tm, bob, zapAddr } = await loadFixture(zapFixture);
-      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, { value: E("2") });
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") });
       const [debt, coll, rate, status] = await zap.position();
       expect(status).to.equal(1n);
       expect(rate).to.equal(E("0.05"));
@@ -81,7 +96,7 @@ describe("LeverZap (one-click leverage)", () => {
 
     it("lower LTV gives lower leverage", async () => {
       const { zap, bob } = await loadFixture(zapFixture);
-      await zap.connect(bob).leverOpen(E("0.05"), 3333, 6, { value: E("3") }); // 1.5x target
+      await zap.connect(bob).leverOpen(E("0.05"), 3333, 6, 2000, { value: E("3") }); // 1.5x target
       const [, coll] = await zap.position();
       expect(coll).to.be.gte(E("4"));
       expect(coll).to.be.lte(E("4.6"));
@@ -91,9 +106,9 @@ describe("LeverZap (one-click leverage)", () => {
   describe("leverClose", () => {
     it("fully unwinds without flash loans and returns ~all ETH", async () => {
       const { zap, tm, orUSD, bob, zapAddr } = await loadFixture(zapFixture);
-      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, { value: E("2") });
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") });
       const before = await ethers.provider.getBalance(bob.address);
-      const tx = await zap.connect(bob).leverClose();
+      const tx = await zap.connect(bob).leverClose(2000);
       const rc = await tx.wait();
       const gas = rc.gasUsed * rc.gasPrice;
       const back = (await ethers.provider.getBalance(bob.address)) - before + gas;
@@ -107,11 +122,11 @@ describe("LeverZap (one-click leverage)", () => {
 
     it("reverts when there is no open position; zap is reusable after close", async () => {
       const { zap, bob } = await loadFixture(zapFixture);
-      await expect(zap.connect(bob).leverClose())
+      await expect(zap.connect(bob).leverClose(2000))
         .to.be.revertedWith("LeverZap: no open position");
-      await zap.connect(bob).leverOpen(E("0.05"), 5000, 6, { value: E("2") });
-      await zap.connect(bob).leverClose();
-      await zap.connect(bob).leverOpen(E("0.07"), 5000, 6, { value: E("2") }); // reopen works
+      await zap.connect(bob).leverOpen(E("0.05"), 5000, 6, 2000, { value: E("2") });
+      await zap.connect(bob).leverClose(2000);
+      await zap.connect(bob).leverOpen(E("0.07"), 5000, 6, 2000, { value: E("2") }); // reopen works
       const [, , rate, status] = await zap.position();
       expect(status).to.equal(1n);
       expect(rate).to.equal(E("0.07"));
@@ -138,12 +153,12 @@ describe("LeverZap (one-click leverage)", () => {
         const dep = randRange(next, E("3"), E("6")); // 3 ETH covers min debt even at 30% LTV
         const ltv = randRange(next, 3000n, 7000n);
         const rate = randRange(next, E("0.005"), E("0.5"));
-        await zap.connect(bob).leverOpen(rate, ltv, 6, { value: dep });
+        await zap.connect(bob).leverOpen(rate, ltv, 6, 5000, { value: dep }); // big deposits on the shallow demo pool
         const [debt, coll, , status] = await zap.position();
         expect(status, `open ${i}`).to.equal(1n);
         expect(coll).to.be.gt(dep); // always levered above the raw deposit
         const before = await ethers.provider.getBalance(bob.address);
-        const tx = await zap.connect(bob).leverClose();
+        const tx = await zap.connect(bob).leverClose(2000);
         const rc = await tx.wait();
         const back = (await ethers.provider.getBalance(bob.address)) - before + rc.gasUsed * rc.gasPrice;
         expect(await tm.getTroveStatus(zapAddr), `close ${i}`).to.not.equal(1n);

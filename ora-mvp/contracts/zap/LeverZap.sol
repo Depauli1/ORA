@@ -39,6 +39,11 @@ interface IPool {
  * leverOpen: deposit ETH, pick a per-loop LTV — the zap opens a trove at the
  *   user's chosen interest rate, then loops borrow → swap orUSD→ETH → add
  *   collateral, compounding exposure up to ~1/(1−LTV)×.
+ * Slippage guard: _maxSlippageBps caps the TOTAL equity lost to swap costs
+ *   (fees + price impact + any sandwich) across the whole atomic operation,
+ *   measured against the ORACLE price — a manipulated pool cannot bypass a
+ *   bound it doesn't control, and because the operation is atomic, exceeding
+ *   the budget reverts everything.
  * leverClose: stepwise unwind with NO flash loans — repay what we hold,
  *   withdraw the freed collateral above a 112% safety ICR, swap it back to
  *   orUSD, repeat; close and sweep everything to the owner.
@@ -82,9 +87,10 @@ contract LeverZap {
 
     /* Open a leveraged position. _ltvBps = borrow per loop as bps of collateral
      * value (e.g. 6000 = 60% → ~2.5× at 6 loops). Effective leverage ≈ 1/(1−LTV). */
-    function leverOpen(uint256 _annualRate, uint256 _ltvBps, uint256 _loops) external payable onlyOwner {
+    function leverOpen(uint256 _annualRate, uint256 _ltvBps, uint256 _loops, uint256 _maxSlippageBps) external payable onlyOwner {
         require(msg.value > 0, "LeverZap: no ETH sent");
         require(_ltvBps > 0 && _ltvBps <= 8000, "LeverZap: LTV must be in (0, 80%]");
+        require(_maxSlippageBps < 10000, "LeverZap: bad slippage");
         require(troveManager.getTroveStatus(address(this)) != 1, "LeverZap: position already open");
 
         uint256 price = priceFeed.getPrice();
@@ -95,7 +101,7 @@ contract LeverZap {
         for (uint256 i = 0; i < _loops; i++) {
             uint256 bal = orUSD.balanceOf(address(this));
             if (bal < MIN_STEP) break;
-            uint256 ethOut = pool.swapOrUSDForETH(bal, 0);
+            uint256 ethOut = pool.swapOrUSDForETH(bal, 0); // aggregate-guarded below
             borrowerOps.addColl{ value: ethOut }(address(0), address(0));
             uint256 more = ethOut.mul(price).div(DECIMAL_PRECISION).mul(_ltvBps).div(10000);
             if (more < MIN_STEP) break;
@@ -108,12 +114,30 @@ contract LeverZap {
             borrowerOps.addColl{ value: ethRest }(address(0), address(0));
         }
         (uint256 d, uint256 c, , ) = troveManager.getEntireDebtAndColl(address(this));
+        // aggregate slippage bound: remaining equity (at ORACLE price) must be
+        // at least (1 - maxSlippage) of the deposited value
+        uint256 collValue = c.mul(price).div(DECIMAL_PRECISION);
+        uint256 netDebt = d.sub(GAS_COMP);
+        require(collValue > netDebt, "LeverZap: slippage exceeded");
+        require(collValue.sub(netDebt) >=
+            msg.value.mul(price).div(DECIMAL_PRECISION).mul(10000 - _maxSlippageBps).div(10000),
+            "LeverZap: slippage exceeded");
         emit LeverOpened(msg.value, c, d);
     }
 
     /* Fully unwind: no flash loans — iteratively repay + free collateral. */
-    function leverClose() external onlyOwner {
+    function leverClose(uint256 _maxSlippageBps) external onlyOwner {
+        require(_maxSlippageBps < 10000, "LeverZap: bad slippage");
         require(troveManager.getTroveStatus(address(this)) == 1, "LeverZap: no open position");
+        // entry equity at the ORACLE price — the aggregate slippage baseline
+        uint256 entryPrice = priceFeed.getPrice();
+        uint256 equity0;
+        {
+            (uint256 d0, uint256 c0, , ) = troveManager.getEntireDebtAndColl(address(this));
+            uint256 cv0 = c0.mul(entryPrice).div(DECIMAL_PRECISION);
+            uint256 nd0 = d0.sub(GAS_COMP);
+            equity0 = cv0 > nd0 ? cv0.sub(nd0) : 0;
+        }
         for (uint256 i = 0; i < 20; i++) {
             (uint256 debt, uint256 coll, , ) = troveManager.getEntireDebtAndColl(address(this));
             uint256 bal = orUSD.balanceOf(address(this));
@@ -135,7 +159,7 @@ contract LeverZap {
             require(coll > needColl.add(1e15), "LeverZap: cannot unwind further (ICR too thin)");
             uint256 free = coll.sub(needColl);
             borrowerOps.withdrawColl(free, address(0), address(0));
-            pool.swapETHForOrUSD{ value: address(this).balance }(0);
+            pool.swapETHForOrUSD{ value: address(this).balance }(0); // aggregate-guarded below
         }
         require(troveManager.getTroveStatus(address(this)) != 1, "LeverZap: unwind incomplete — try again or use exec()");
 
@@ -145,6 +169,11 @@ contract LeverZap {
             pool.swapOrUSDForETH(orUSDLeft, 0);
             orUSDLeft = 0;
         }
+        // aggregate slippage bound: ETH returned must be worth at least
+        // (1 - maxSlippage) of the position's entry equity
+        require(address(this).balance.mul(entryPrice).div(DECIMAL_PRECISION) >=
+            equity0.mul(10000 - _maxSlippageBps).div(10000),
+            "LeverZap: slippage exceeded");
         uint256 ethLeft = address(this).balance;
         if (ethLeft > 0) {
             // owner is immutable and set by the factory to the zap's creator

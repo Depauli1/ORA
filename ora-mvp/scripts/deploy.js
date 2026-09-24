@@ -115,10 +115,37 @@ async function main() {
     sequencerSettable = true;
   }
 
-  const priceFeed = await deploy("ChainlinkPriceFeed", ethUsdAggregatorAddr, ETHUSD_TIMEOUT, sequencerFeedAddr);
+  // Secondary ETH/USD source (multi-source hardening): a >50% single-fetch
+  // move needs confirmation from BOTH sources; the fallback serves alone when
+  // the primary is broken/stale. Public L2s: ORA_ETHUSD_FALLBACK_FEED (e.g.
+  // an API3/Pyth Chainlink-compatible adapter); local: settable mock.
+  let ethUsdFallbackAddr = ethers.ZeroAddress;
+  let ethUsdFallbackSettable = false;
+  if (REAL_FEEDS[network.name]) {
+    const cand = process.env.ORA_ETHUSD_FALLBACK_FEED;
+    if (cand) {
+      try {
+        const probe = new ethers.Contract(cand,
+          ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)"], ethers.provider);
+        await probe.latestRoundData();
+        ethUsdFallbackAddr = cand;
+        console.log(`  using ETH/USD fallback source: ${cand}`);
+      } catch { console.log(`  WARNING: fallback feed probe failed at ${cand} — single-source mode`); }
+    } else {
+      console.log("  no ORA_ETHUSD_FALLBACK_FEED set — single-source mode (fine for testnets)");
+    }
+  } else {
+    const aggFb = await deploy("SettableAggregator", 8, "ETH / USD (fallback)", 2000n * 10n ** 8n);
+    ethUsdFallbackAddr = await a(aggFb);
+    ethUsdFallbackSettable = true;
+  }
+  const MAX_DEVIATION_BPS = 5000; // 50% single-fetch move cap (upstream Liquity philosophy)
+
+  const priceFeed = await deploy("ChainlinkPriceFeed",
+    ethUsdAggregatorAddr, ETHUSD_TIMEOUT, sequencerFeedAddr, ethUsdFallbackAddr, MAX_DEVIATION_BPS);
   const priceFeed2 = await deploy("WstETHPriceFeed",
     ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH),
-    ETHUSD_TIMEOUT, STETHETH_TIMEOUT, sequencerFeedAddr);
+    ETHUSD_TIMEOUT, STETHETH_TIMEOUT, sequencerFeedAddr, MAX_DEVIATION_BPS);
 
   // Phase 4: tokenized T-bill fund (RWA). NAV per share starts at $1.05; on
   // mainnet the aggregator would be the fund administrator's NAV oracle.
@@ -412,6 +439,8 @@ async function main() {
     shared: {
       sequencerUptimeFeed: sequencerFeedAddr,
       sequencerSettable,
+      ethUsdFallbackAggregator: ethUsdFallbackAddr,
+      ethUsdFallbackSettable,
       orUSDToken: await a(orUSD),
       oraToken: await a(oraToken),
       oraStaking: await a(oraStaking),

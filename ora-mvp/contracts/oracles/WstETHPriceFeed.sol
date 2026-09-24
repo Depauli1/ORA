@@ -43,6 +43,7 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
     // each feed gets its own staleness window (Chainlink heartbeat + margin).
     uint public immutable ethUsdTimeout;
     uint public immutable stEthEthTimeout;
+    uint public immutable maxDeviationBps; // max single-fetch move vs lastGoodPrice
 
     uint constant public DEPEG_THRESHOLD = 96e16;  // stETH/ETH < 0.96 trips the breaker
     uint constant public RATE_CAP = 1e18;          // stETH never priced above ETH
@@ -60,8 +61,11 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         address _wstETH,
         uint _ethUsdTimeout,
         uint _stEthEthTimeout,
-        address _sequencerUptimeFeed
+        address _sequencerUptimeFeed,
+        uint _maxDeviationBps
     ) public SequencerGuard(_sequencerUptimeFeed) {
+        require(_maxDeviationBps > 0 && _maxDeviationBps <= 10000, "WstETHPriceFeed: bad deviation");
+        maxDeviationBps = _maxDeviationBps;
         checkContract(_ethUsdAggregator);
         checkContract(_stEthEthAggregator);
         checkContract(_wstETH);
@@ -122,6 +126,10 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         if (!_sequencerUp()) { return lastGoodPrice; }
         (uint price, bool ok, ) = _currentPrice(
             ethUsdAggregator, stEthEthAggregator, ethUsdDecimals, stEthEthDecimals, wstETH, ethUsdTimeout, stEthEthTimeout);
+        if (ok) {
+            uint diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
+            if (diff * 10000 > lastGoodPrice * maxDeviationBps) { ok = false; }
+        }
         return ok ? price : lastGoodPrice;
     }
 
@@ -137,6 +145,14 @@ contract WstETHPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, 
         }
         (uint price, bool ok, bool depeg) = _currentPrice(
             ethUsdAggregator, stEthEthAggregator, ethUsdDecimals, stEthEthDecimals, wstETH, ethUsdTimeout, stEthEthTimeout);
+
+        // Deviation guard: a composite move beyond maxDeviationBps in a single
+        // fetch is treated as a broken input (no secondary composite source to
+        // confirm) — serve lastGoodPrice, flag the oracle down.
+        if (ok) {
+            uint diff = price > lastGoodPrice ? price - lastGoodPrice : lastGoodPrice - price;
+            if (diff * 10000 > lastGoodPrice * maxDeviationBps) { ok = false; }
+        }
 
         if (!ok) {
             if (oracleLive) { oracleLive = false; emit OracleStatusChanged(false); }

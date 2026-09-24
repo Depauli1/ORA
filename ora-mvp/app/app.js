@@ -5,6 +5,23 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+
+// Error tracking: uncaught errors/rejections are reported to the app server's
+// /log ring buffer (inspect at GET /log). No third-party telemetry.
+function reportError(kind, message, stack) {
+  try {
+    fetch("/log", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind, message: String(message).slice(0, 500),
+        stack: String(stack || "").slice(0, 1500), url: location.href, ua: navigator.userAgent })
+    }).catch(() => {});
+  } catch {}
+}
+window.addEventListener("error", e => reportError("error", e.message, e.error && e.error.stack));
+window.addEventListener("unhandledrejection", e =>
+  reportError("unhandledrejection", (e.reason && (e.reason.message || e.reason)) || "unknown",
+    e.reason && e.reason.stack));
 const Z = "0x0000000000000000000000000000000000000000";
 const MAX_FEE = ethers.parseEther("0.05");
 const GAS_COMP = ethers.parseEther("200"); // refunded on close — repay = debt − 200
@@ -137,6 +154,8 @@ function connectContracts() {
     ? new ethers.Contract(B.stEthEthAggregator, A.settableAggregator, runner) : null;
   C.aggSeq = dep.shared && dep.shared.sequencerSettable && dep.shared.sequencerUptimeFeed !== Z
     ? new ethers.Contract(dep.shared.sequencerUptimeFeed, A.settableAggregator, runner) : null;
+  C.aggEthFb = dep.shared && dep.shared.ethUsdFallbackSettable && dep.shared.ethUsdFallbackAggregator !== Z
+    ? new ethers.Contract(dep.shared.ethUsdFallbackAggregator, A.settableAggregator, runner) : null;
   C.troveManager = new ethers.Contract(
     B.troveManager, B.rates ? A.troveManagerRates
       : B.native ? A.troveManager : (A.troveManagerV2 || A.troveManager), runner);
@@ -806,16 +825,18 @@ async function main() {
       zap = await myZap();
       if (!zap) return;
     }
+    const slipBps = BigInt(Math.round((parseFloat($("lvSlip").value) || 20) * 100));
     const lev = (10000 / (10000 - Number(ltvBps))).toFixed(1);
     tx(`Open ~${lev}× leverage with ${collEth} ETH`, () =>
-      zap.leverOpen(ethers.parseEther((ratePct / 100).toFixed(6)), ltvBps, 6n,
+      zap.leverOpen(ethers.parseEther((ratePct / 100).toFixed(6)), ltvBps, 6n, slipBps,
         { value: ethers.parseEther(String(collEth)) }));
   });
   $("btnLvClose").addEventListener("click", async () => {
     if (!wallet) return toast("Connect a wallet first");
     const zap = await myZap();
     if (!zap) return toast("No leverage position to close");
-    tx("Close & unwind leveraged position", () => zap.leverClose());
+    const slipBps = BigInt(Math.round((parseFloat($("lvSlip").value) || 20) * 100));
+    tx("Close & unwind leveraged position", () => zap.leverClose(slipBps));
   });
 
   const stkAmt = () => ethers.parseEther($("stkInput").value || "0");
@@ -836,9 +857,15 @@ async function main() {
     tx("ORA faucet", () => C.ora.connect(treasury).transfer(myAddr(), ethers.parseEther("100")));
   });
 
-  // Market simulator: ETH/USD (settable aggregator only)
+  // Market simulator: ETH/USD (settable aggregator only). The fallback source
+  // is moved in lockstep so big crashes are two-source CONFIRMED and pass the
+  // 50% deviation guard — exactly how a real market crash would look.
   const setEthUsd = async v =>
-    tx(`Set ETH/USD to $${v.toFixed(0)}`, () => C.aggEth.setAnswer(BigInt(Math.round(v * 1e8))));
+    tx(`Set ETH/USD to $${v.toFixed(0)}`, async () => {
+      const answer = BigInt(Math.round(v * 1e8));
+      if (C.aggEthFb) await (await C.aggEthFb.setAnswer(answer)).wait();
+      return C.aggEth.setAnswer(answer);
+    });
   document.querySelectorAll("button[data-bump]").forEach(b =>
     b.addEventListener("click", async () => {
       if (!C.aggEth) return toast("Live Chainlink feed — not settable");

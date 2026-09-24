@@ -122,11 +122,11 @@ async function main() {
   const zap = await ethers.getContractAt("LeverZap", zapAddr);
   const tm4 = await ethers.getContractAt("TroveManagerRates", B4.troveManager);
 
-  await expectRevert(zap.connect(signers[0]).leverOpen(E("0.05"), 6000, 6, { value: E("1") }),
+  await expectRevert(zap.connect(signers[0]).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("1") }),
     "non-owner cannot drive the zap");
 
   const ethBefore = await ethers.provider.getBalance(user.address);
-  await (await zap.connect(user).leverOpen(E("0.05"), 6000, 6, { value: E("2") })).wait();
+  await (await zap.connect(user).leverOpen(E("0.05"), 6000, 6, 2000, { value: E("2") })).wait();
   const [debt, coll, zRate, status] = await zap.position();
   ok(status === 1n, "leveraged trove is active");
   ok(zRate === E("0.05"), "trove pays the chosen 5% rate");
@@ -134,7 +134,7 @@ async function main() {
   const icrZap = await tm4.getCurrentICR(zapAddr, E("2000"));
   ok(icrZap > E("1.1"), "leveraged position above MCR", `${(Number(icrZap) / 1e16).toFixed(1)}%`);
 
-  await (await zap.connect(user).leverClose()).wait();
+  await (await zap.connect(user).leverClose(2000)).wait();
   ok((await tm4.getTroveStatus(zapAddr)) !== 1n, "leverClose fully unwinds the trove");
   const ethAfter = await ethers.provider.getBalance(user.address);
   const back = ethAfter - ethBefore + E("2"); // net of the 2 ETH deposit

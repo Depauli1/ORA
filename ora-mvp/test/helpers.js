@@ -27,7 +27,7 @@ async function ratesFixture() {
   const { deploy, a } = await deployCore(deployer);
 
   const agg = await deploy("SettableAggregator", 8, "ETH / USD", 2000n * 10n ** 8n);
-  const feed = await deploy("ChainlinkPriceFeed", await a(agg), 48 * 3600, ethers.ZeroAddress);
+  const feed = await deploy("ChainlinkPriceFeed", await a(agg), 48 * 3600, ethers.ZeroAddress, ethers.ZeroAddress, 5000);
 
   const sorted = await deploy("SortedTrovesRates");
   const tm = await deploy("TroveManagerRates");
