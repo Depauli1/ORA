@@ -67,6 +67,9 @@ contract OraSwapPool {
         require(orUSD.transferFrom(msg.sender, address(this), _orUSDIn), "OraSwapPool: transfer failed");
         reserveOrUSD = reserveOrUSD.add(_orUSDIn);
         reserveETH = reserveETH.sub(ethOut);
+        // Paying the swap output to the swapper IS the product; reserves are
+        // updated first (checks-effects-interactions).
+        // slither-disable-next-line arbitrary-send-eth
         (bool ok, ) = msg.sender.call{ value: ethOut }("");
         require(ok, "OraSwapPool: ETH send failed");
         emit Swap(msg.sender, false, _orUSDIn, ethOut);

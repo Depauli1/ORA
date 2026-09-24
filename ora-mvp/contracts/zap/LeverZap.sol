@@ -147,6 +147,8 @@ contract LeverZap {
         }
         uint256 ethLeft = address(this).balance;
         if (ethLeft > 0) {
+            // owner is immutable and set by the factory to the zap's creator
+            // slither-disable-next-line arbitrary-send-eth
             (bool ok, ) = owner.call{ value: ethLeft }("");
             require(ok, "LeverZap: ETH sweep failed");
         }
@@ -155,6 +157,8 @@ contract LeverZap {
 
     // Escape hatch: the owner can make the zap do anything (manual unwind, rescue)
     function exec(address _target, bytes calldata _data, uint256 _value) external onlyOwner returns (bytes memory) {
+        // deliberate owner-only escape hatch: arbitrary call is the feature
+        // slither-disable-next-line arbitrary-send-eth,low-level-calls
         (bool ok, bytes memory ret) = _target.call{ value: _value }(_data);
         require(ok, "LeverZap: exec failed");
         return ret;

@@ -70,8 +70,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Gate — no high-severity findings in new ORA contracts
         run: |
-          slither . --ignore-compile --fail-high \
-            --filter-paths "node_modules|Dependencies/|Interfaces/|TestContracts/|LQTY/|Proxy|TroveManager|BorrowerOperations|StabilityPool|ActivePool|DefaultPool|CollSurplusPool|HintHelpers|SortedTroves|MultiTroveGetter|GasPool|LUSDToken|Migrations|LiquityBaseRWA"
+          slither . --ignore-compile --json slither-gate.json \
+            --filter-paths "node_modules|Dependencies/|Interfaces/|TestContracts/|LQTY/|Proxy|TroveManager|BorrowerOperations|StabilityPool|ActivePool|DefaultPool|CollSurplusPool|HintHelpers|SortedTroves|MultiTroveGetter|GasPool|LUSDToken|Migrations|LiquityBaseRWA" \
+            || true
+          node scripts/slither-gate.js slither-gate.json
       - name: Upload full report
         if: always()
         uses: actions/upload-artifact@v4
