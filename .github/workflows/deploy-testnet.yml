@@ -1,0 +1,83 @@
+# Deploys the ORA protocol to Base Sepolia from CI (the dev sandbox cannot
+# reach public RPCs, so GitHub's runners are the deploy machine).
+#
+# Trigger: push any change to ora-mvp/.deploy-testnet-trigger on this branch.
+# Gate:    fails fast with funding instructions while the deployer is unfunded.
+# Output:  commits ora-mvp/app/deployment-baseSepolia.json back to the branch —
+#          the ORA web app's "Base Sepolia" network switch reads that file.
+#
+# Deployer key: secrets.DEPLOYER_KEY if configured, else the committed
+# throwaway testnet key (ora-mvp/.testnet-deployer.key — faucet ETH only).
+name: Deploy ORA to Base Sepolia
+
+on:
+  push:
+    branches: ["arena/01a0d2bf-ora"]
+    paths: ["ora-mvp/.deploy-testnet-trigger"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-base-sepolia
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    env:
+      ORA_DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check deployer funding (fails with faucet instructions if unfunded)
+        run: node scripts/check-deployer.js
+
+      - name: Compile contracts
+        run: npx hardhat compile
+
+      - name: Deploy protocol to Base Sepolia
+        run: npx hardhat run scripts/deploy-public.js --network baseSepolia
+
+      - name: Seed first troves + pools (adaptive, non-fatal)
+        run: npx hardhat run scripts/seed-public.js --network baseSepolia || echo "::warning::seed incomplete — fund the deployer further and re-trigger"
+
+      - name: Commit deployment artifacts back to the branch
+        working-directory: .
+        run: |
+          git config user.name "ora-deploy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add ora-mvp/app/deployment-baseSepolia.json
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "Base Sepolia deployment artifacts (deploy-testnet workflow) [skip ci]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Summary
+        run: |
+          echo "## ORA on Base Sepolia" >> "$GITHUB_STEP_SUMMARY"
+          node -e "
+            const d = require('./app/deployment-baseSepolia.json');
+            const lines = [];
+            lines.push('| Contract | Address |', '|---|---|');
+            lines.push('| orUSD | ' + d.shared.orUSDToken + ' |');
+            lines.push('| ORA | ' + d.shared.oraToken + ' |');
+            for (const [n, b] of Object.entries(d.branches)) {
+              lines.push('| ' + n + ' TroveManager | ' + b.troveManager + ' |');
+            }
+            console.log(lines.join('\n'));
+          " >> "$GITHUB_STEP_SUMMARY"

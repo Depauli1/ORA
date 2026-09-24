@@ -13,8 +13,10 @@ const { ethers } = hre;
 
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  const p = path.join(__dirname, "..", ".secret");
-  if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
+  for (const f of [".secret", ".testnet-deployer.key"]) {
+    const p = path.join(__dirname, "..", f);
+    if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
+  }
   throw new Error("No deployer key: run scripts/gen-deployer.js or set ORA_DEPLOYER_KEY");
 }
 

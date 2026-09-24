@@ -153,6 +153,14 @@
       fee, 40k orUSD/20 ETH seed); on a public chain the zap would route
       through a real DEX. Verified on-chain: 2 ETH → 2.5×-target →
       1.98 ETH round trip; 27/27 tests in `scripts/test-rwa-zap.js`.
+- [x] **Testnet graduation pipeline (Base Sepolia)** — the protocol deploys to a
+      public testnet through CI (`.github/workflows/deploy-testnet.yml`): funding
+      gate with faucet instructions → full 4-branch deploy (`deploy-public.js`,
+      treasury derived from the deployer key) → adaptive first-trove/SP/AMM
+      seeding (`seed-public.js`, idempotent) → `deployment-baseSepolia.json`
+      committed back for the app's network switcher. Chainlink ETH/USD is probed
+      on-chain at deploy time with a settable-aggregator fallback so a bad feed
+      address can never brick the deploy. Runbook: `ora-mvp/DEPLOY_BASE_SEPOLIA.md`.
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 

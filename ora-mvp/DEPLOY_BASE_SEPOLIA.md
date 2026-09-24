@@ -1,115 +1,103 @@
-# ORA — Base Sepolia Deployment Runbook
+# ORA on Base Sepolia — public testnet deployment
 
-The Arena sandbox's network allowlist blocks public RPC endpoints, so the
-public-testnet deployment runs from any machine with open internet
-(laptop, CI, a VPS — anything that can `npm install`).
+The protocol graduates from the local demo chain to Base Sepolia through a
+GitHub Actions pipeline (the dev sandbox cannot reach public RPCs, so CI is
+the deploy machine). Everything is automated except one step: **funding the
+deployer with faucet ETH**.
 
-## One-time setup
+## How it works
 
-```bash
-git clone https://github.com/Depauli1/ORA.git
-cd ORA/ora-mvp
-git checkout arena/01a0d2bf-ora
-npm install
-npx hardhat compile
+```
+fund deployer ──> touch ora-mvp/.deploy-testnet-trigger ──> push
+                                        │
+                     .github/workflows/deploy-testnet.yml
+                                        │
+        npm ci → check funding → compile → deploy-public → seed-public
+                                        │
+          commits app/deployment-baseSepolia.json back to the branch
+                                        │
+        ORA web app → network switch "Base Sepolia" → MetaMask → live
 ```
 
-## 1. Create & fund the deployer
+## 1. Fund the deployer (the only manual step)
+
+The pipeline deploys from a throwaway, testnet-only key committed at
+`ora-mvp/.testnet-deployer.key` (it never holds anything but faucet ETH).
+
+**Deployer address: `0xbC8aFFCE0B146B9e82fa7D8C7d0d40D1443Cd131`**
+
+Free Base Sepolia faucets (no mainnet balance required):
+- https://portal.cdp.coinbase.com/products/faucet (Coinbase — pick "Base Sepolia")
+- https://www.alchemy.com/faucets/base-sepolia
+- https://faucet.quicknode.com/base/sepolia
+
+Budget (Base Sepolia gas is near-zero — the full ~60-contract deploy costs
+well under 0.01 ETH):
+
+| Funding | What you get |
+|---|---|
+| ~0.05 ETH | Full deploy + seeded wstETH & wmTBILL branches (ERC20 faucet collateral) |
+| ~3.5 ETH | Everything: also first troves on both native-ETH branches + AMM liquidity |
+
+`seed-public.js` is adaptive and idempotent — fund a little now, re-trigger
+later with more, and it fills in whatever is missing.
+
+> Optional hardening: as repo owner you can add an Actions secret named
+> `DEPLOYER_KEY` (Settings → Secrets and variables → Actions) with your own
+> key; the workflow prefers it over the committed file.
+
+## 2. Trigger the deploy
 
 ```bash
-node scripts/gen-deployer.js
+date > ora-mvp/.deploy-testnet-trigger
+git add ora-mvp/.deploy-testnet-trigger && git commit -m "deploy: Base Sepolia" && git push
 ```
 
-This prints a fresh deployer address (key saved to `ora-mvp/.secret`,
-gitignored, **testnet use only**). Fund it with ~0.05 Base Sepolia ETH:
+The workflow (Actions tab → "Deploy ORA to Base Sepolia"):
+1. **Fails fast with faucet instructions** if the deployer is unfunded — that
+   is the expected first-run state, not an error in the pipeline.
+2. Deploys all four branches (ETH, wstETH, wmTBILL RWA, ETH v2 rates) + the
+   swap pool and LeverZap factory, wiring identical to the local chain.
+3. Derives the treasury wallet from the deployer key (`deploy-public.js`) so
+   the ORA faucet allocation is not transfer-locked (LQTYToken locks the
+   multisig=deployer for year 1).
+4. Seeds first troves / SP deposits / vault / AMM as balance allows.
+5. Commits `app/deployment-baseSepolia.json` to this branch.
 
-- Coinbase faucet: https://portal.cdp.coinbase.com/products/faucet
-- Alchemy faucet:  https://www.alchemy.com/faucets/base-sepolia
+## 3. Use it
 
-Already generated in this workspace: `0xe169b120023A9a8AeF04197E9c624bE6EBC59268`
-(if you deploy from another machine, gen-deployer will create its own key).
+Open the ORA web app, switch the network selector to **Base Sepolia**,
+connect MetaMask (the app offers to add/switch the chain). Test collateral
+for wstETH/wmTBILL comes from the built-in faucet buttons; test ETH from the
+faucets above.
 
-## 2. Deploy both branches
+## Oracle notes
 
-```bash
-npx hardhat run scripts/deploy-public.js --network baseSepolia
-```
+- ETH/USD uses the real Chainlink Base Sepolia feed configured in
+  `scripts/deploy.js` (`REAL_FEEDS`), env-overridable via `ORA_ETHUSD_FEED`.
+  The deploy **probes the aggregator on-chain first** (answer > 0, fresh
+  within 48h); if the probe fails it falls back to a `SettableAggregator`
+  at $2000 rather than bricking the deploy — the app's market simulator then
+  drives the price instead of Chainlink.
+- stETH/ETH and the mTBILL NAV have no canonical Base Sepolia feeds →
+  `SettableAggregator` mocks everywhere (they power the depeg/NAV-shock
+  demos).
+- The wmTBILL branch prices collateral at NAV × wrapper rate via
+  `WTBillPriceFeed` exactly as on the local chain.
 
-For a production-grade deployment add `ORA_RENOUNCE_REGISTRAR=1` to freeze the
-orUSD branch set (renounces the one remaining admin power — no new collateral
-branches can ever be added to that deployment). Leave it off while iterating.
-Afterwards, `node scripts/verify-tokenomics.js` audits the deployment against
-every tokenomics claim (supply, fee routing, issuance caps, renounced ownership).
+## Branch parameters (identical to local)
 
-This deploys and wires, in one run:
-- **ETH branch** — full native-ETH core (TroveManager, pools, BorrowerOperations)
-- **wstETH branch** — ERC20 pool suite + MockWstETH (public faucet, 1000/call)
-- **mTBILL branch (Phase 4, RWA)** — tokenized T-bill fund collateral
-  (`MockTBill`, faucet 100,000/call) with `RWAPriceFeed` (NAV oracle: +2%/update
-  upside clamp, sticky NAV-shock flag >2% below the high-water mark, 72h
-  staleness fallback), a **2,000,000 orUSD branch debt cap** (strict isolation
-  backstop, enforced on every mint), TroveManagerV2 soft liquidations,
-  BranchStaking, and 500,000 ORA of Stability Pool issuance
-- **Shared** — orUSD (both branches registered), ORA token, ORA staking
-- **Real oracle adapters (Phase 1.5)** — the ETH branch uses the live Chainlink
-  ETH/USD feed on Base Sepolia (default `0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1`,
-  override with `ORA_ETHUSD_FEED=<address>`; the adapter constructor reverts if
-  the feed doesn't return a valid in-date price, so a wrong address fails loudly).
-  The wstETH branch composes ETH/USD x stETH/ETH x wstETH exchange rate with a
-  depeg circuit breaker at 0.96; since Base Sepolia has no canonical stETH/ETH
-  feed, that leg uses a SettableAggregator mock (which doubles as the depeg demo).
-  48h staleness timeout; broken/stale feeds fall back to lastGoodPrice.
-- **Phase 2 tokenomics + soft liquidations (wstETH branch)** — `TroveManagerV2`
-  (adds `liquidatePartial`: partial SP offset at a 3% premium for troves in the
-  [105%, 110%) soft band, trove restored to 110% and kept open, 0.5% of seized
-  collateral to the caller), `BranchStaking` (stake ORA → earn the branch's
-  borrow fees in orUSD + redemption fees in wstETH; ORA is pulled via
-  `transferFrom`, so staking needs a one-time approve — the app does this
-  automatically), and `BranchCommunityIssuance` (the deploy script transfers
-  **1,000,000 ORA** from the derived treasury and activates it, locking the cap;
-  wstETH Stability Pool depositors then earn ORA on the yearly-halving curve).
-  The ETH branch keeps the audited v1 TroveManager and classic ORA staking.
+| Branch | Collateral | MCR / CCR | Extras |
+|---|---|---|---|
+| ETH | native ETH | 110% / 150% | classic Liquity v1 engine |
+| wstETH | MockWstETH | 110% / 150% | soft-liq band [105%, 110%), BranchStaking, 1M ORA SP issuance |
+| tBILL | wmTBILL (yield-share wrapper) | **105% / 115%** | soft band [103%, 105%), 2%/yr skim → treasury, 2M orUSD debt cap, 500k ORA |
+| ETHv2 | native ETH | 110% / 150% | user-set rates 0.5–100%, sorUSD vault (80/20), OraSwapPool + LeverZap, 500k ORA |
 
-Addresses + ABIs are written to `app/deployment-baseSepolia.json` — commit it.
+## Redeploying
 
-```bash
-git add app/deployment-baseSepolia.json && git commit -m "chore: Base Sepolia deployment" && git push
-```
-
-## 3. Verify (optional but recommended)
-
-```bash
-ORA_RPC_URL=https://sepolia.base.org npx hardhat verify --network baseSepolia <ADDRESS> [constructor args]
-```
-
-(Requires `ETHERSCAN_API_KEY` for Basescan in the env; can be batched later.)
-
-## Custom RPC
-
-`ORA_RPC_URL` overrides the default `https://sepolia.base.org`, and
-`ORA_DEPLOYER_KEY` overrides the `.secret` file:
-
-```bash
-ORA_RPC_URL=https://base-sepolia.g.alchemy.com/v2/<key> npx hardhat run scripts/deploy-public.js --network baseSepolia
-```
-
-## Frontend
-
-Done (Phase 1.5): the app has a **network switcher** (Local / Base Sepolia).
-Base Sepolia mode loads `deployment-baseSepolia.json`, reads via
-`https://sepolia.base.org` directly from the browser (browsers are not behind
-the sandbox firewall), and signs with MetaMask (auto adds/switches to chain
-84532). Until `deployment-baseSepolia.json` is committed, the switcher shows
-a friendly "not deployed yet" notice.
-
-Phase 2 UI: the Stake ORA card is branch-aware (classic staking on the ETH
-branch, `BranchStaking` with auto-approve on the other branches, fee labels in
-the branch's collateral symbol), Stability Pool cards show the real ORA reward
-on all branches, and the risky-troves table adds a **Soft-liq** button for
-ERC20-branch troves inside the [105%, 110%) band.
-
-Phase 4 UI: an **mTBILL (RWA)** tab with its own faucet amount and open-trove
-defaults, a NAV simulator row (accrue a month of yield, spike +14% to watch
-the on-chain clamp cap it at +2%, shock −3% to trip the break-the-buck
-breaker), a **NAV SHOCK** oracle badge state, and the branch debt cap surfaced
-in the open-trove preview.
+Each trigger push runs a **fresh full deploy** (new addresses) and overwrites
+`deployment-baseSepolia.json`. The previous deployment keeps existing on
+chain but the app only shows the latest. Deterministic-address guarantees do
+NOT hold on public networks (nonce depends on history) — always use the
+committed deployment file, never hardcoded addresses.

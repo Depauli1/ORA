@@ -48,9 +48,31 @@ async function main() {
   let ethUsdAggregatorAddr;
   let ethUsdSettable;
   if (REAL_FEEDS[network.name]) {
-    ethUsdAggregatorAddr = REAL_FEEDS[network.name].ethUsd;
-    ethUsdSettable = false;
-    console.log(`  using real Chainlink ETH/USD: ${ethUsdAggregatorAddr}`);
+    // Probe the configured Chainlink aggregator before committing to it: a
+    // wrong/dead address must not brick the deploy. On failure fall back to a
+    // SettableAggregator (still a real public-testnet deployment — the mock
+    // feed simply powers the market simulator instead of live prices).
+    const candidate = REAL_FEEDS[network.name].ethUsd;
+    try {
+      const probe = new ethers.Contract(candidate, [
+        "function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)",
+        "function decimals() view returns (uint8)"
+      ], ethers.provider);
+      const [, answer, , updatedAt] = await probe.latestRoundData();
+      const dec = await probe.decimals();
+      const age = Math.floor(Date.now() / 1000) - Number(updatedAt);
+      if (answer <= 0n || age > ORACLE_TIMEOUT) throw new Error(`bad answer ${answer} / age ${age}s`);
+      ethUsdAggregatorAddr = candidate;
+      ethUsdSettable = false;
+      console.log(`  using real Chainlink ETH/USD: ${candidate}` +
+        ` ($${Number(answer) / 10 ** Number(dec)}, ${age}s old)`);
+    } catch (e) {
+      console.log(`  WARNING: Chainlink ETH/USD probe failed at ${candidate} (${e.message?.slice(0, 80)})`);
+      console.log("  falling back to a SettableAggregator ($2000) — override with ORA_ETHUSD_FEED to use a real feed");
+      const aggEthUsd = await deploy("SettableAggregator", 8, "ETH / USD", 2000n * 10n ** 8n);
+      ethUsdAggregatorAddr = await a(aggEthUsd);
+      ethUsdSettable = true;
+    }
   } else {
     const aggEthUsd = await deploy("SettableAggregator", 8, "ETH / USD", 2000n * 10n ** 8n);
     ethUsdAggregatorAddr = await a(aggEthUsd);

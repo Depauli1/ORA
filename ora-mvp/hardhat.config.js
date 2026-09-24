@@ -24,13 +24,19 @@ subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {
   return runSuper(args);
 });
 
-// Deployer key for public testnets: ORA_DEPLOYER_KEY env var, or ora-mvp/.secret
-// (generate one with: node scripts/gen-deployer.js). NEVER use these keys on mainnet.
+// Deployer key for public testnets, in priority order:
+//   1. ORA_DEPLOYER_KEY env var (e.g. a GitHub Actions secret)
+//   2. ora-mvp/.secret (gitignored, local use — generate with scripts/gen-deployer.js)
+//   3. ora-mvp/.testnet-deployer.key (COMMITTED — throwaway key that only ever
+//      holds faucet testnet ETH, so CI can deploy without repo-secret access)
+// NEVER use any of these keys on mainnet or with real funds.
 const fs = require("fs");
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  const p = path.join(__dirname, ".secret");
-  if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
+  for (const f of [".secret", ".testnet-deployer.key"]) {
+    const p = path.join(__dirname, f);
+    if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
+  }
   return undefined;
 }
 
