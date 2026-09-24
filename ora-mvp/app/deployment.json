@@ -1,23 +1,46 @@
 {
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "addresses": {
-    "priceFeed": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-    "sortedTroves": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-    "troveManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-    "activePool": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    "stabilityPool": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    "gasPool": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
-    "defaultPool": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-    "collSurplusPool": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-    "borrowerOperations": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
-    "hintHelpers": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-    "orUSDToken": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
-    "communityIssuance": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-    "oraStaking": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
-    "lockupFactory": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
-    "oraToken": "0x9A676e781A523b5d0C0e43731313A708CB607508",
-    "multiTroveGetter": "0x0B306BF915C4d645ff596e518fAf3F9669b97016"
+  "shared": {
+    "orUSDToken": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+    "oraToken": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+    "oraStaking": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+    "communityIssuance": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+    "lockupFactory": "0x9A676e781A523b5d0C0e43731313A708CB607508"
+  },
+  "branches": {
+    "ETH": {
+      "native": true,
+      "collSymbol": "ETH",
+      "priceFeed": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "sortedTroves": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "troveManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "activePool": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "stabilityPool": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "gasPool": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "defaultPool": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "collSurplusPool": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "borrowerOperations": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      "hintHelpers": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "multiTroveGetter": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"
+    },
+    "wstETH": {
+      "native": false,
+      "collSymbol": "wstETH",
+      "collToken": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+      "priceFeed": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+      "sortedTroves": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+      "troveManager": "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
+      "activePool": "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
+      "stabilityPool": "0x9E545E3C0baAB3E08CdfD552C960A1050f373042",
+      "gasPool": "0xa82fF9aFd8f496c3d6ac40E2a0F282E47488CFc9",
+      "defaultPool": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8",
+      "collSurplusPool": "0x851356ae760d987E095750cCeb3bC6014560891C",
+      "borrowerOperations": "0xf5059a5D33d5853360D16C683c16e67980206f36",
+      "hintHelpers": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
+      "multiTroveGetter": "0x998abeb3E57409262aE5b751f60747921B33613E",
+      "feeReceiver": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49"
+    }
   },
   "abis": {
     "priceFeed": [
@@ -2568,6 +2591,823 @@
         "type": "function"
       }
     ],
+    "borrowerOperationsERC20": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_activePoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "ActivePoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_collSurplusPoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "CollSurplusPoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_defaultPoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "DefaultPoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_gasPoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "GasPoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_lqtyStakingAddress",
+            "type": "address"
+          }
+        ],
+        "name": "LQTYStakingAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_borrower",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_LUSDFee",
+            "type": "uint256"
+          }
+        ],
+        "name": "LUSDBorrowingFeePaid",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_lusdTokenAddress",
+            "type": "address"
+          }
+        ],
+        "name": "LUSDTokenAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newPriceFeedAddress",
+            "type": "address"
+          }
+        ],
+        "name": "PriceFeedAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_sortedTrovesAddress",
+            "type": "address"
+          }
+        ],
+        "name": "SortedTrovesAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_stabilityPoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "StabilityPoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_borrower",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "arrayIndex",
+            "type": "uint256"
+          }
+        ],
+        "name": "TroveCreated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newTroveManagerAddress",
+            "type": "address"
+          }
+        ],
+        "name": "TroveManagerAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_borrower",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_debt",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_coll",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "stake",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "enum BorrowerOperationsERC20.BorrowerOperation",
+            "name": "operation",
+            "type": "uint8"
+          }
+        ],
+        "name": "TroveUpdated",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "BORROWING_FEE_FLOOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "CCR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "DECIMAL_PRECISION",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "LUSD_GAS_COMPENSATION",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "MCR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "MIN_NET_DEBT",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "NAME",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "PERCENT_DIVISOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "_100pct",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "activePool",
+        "outputs": [
+          {
+            "internalType": "contract IActivePool",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_collAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "addColl",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_maxFeePercentage",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_collDeposit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_collWithdrawal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_LUSDChange",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "_isDebtIncrease",
+            "type": "bool"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "adjustTrove",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "claimCollateral",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "closeTrove",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "collToken",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "defaultPool",
+        "outputs": [
+          {
+            "internalType": "contract IDefaultPool",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_debt",
+            "type": "uint256"
+          }
+        ],
+        "name": "getCompositeDebt",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getEntireSystemColl",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "entireSystemColl",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getEntireSystemDebt",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "entireSystemDebt",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "isOwner",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lqtyStaking",
+        "outputs": [
+          {
+            "internalType": "contract ILQTYStaking",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lqtyStakingAddress",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lusdToken",
+        "outputs": [
+          {
+            "internalType": "contract ILUSDToken",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_borrower",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_collAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "moveETHGainToTrove",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_maxFeePercentage",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_LUSDAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_collAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "openTrove",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "priceFeed",
+        "outputs": [
+          {
+            "internalType": "contract IPriceFeed",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_LUSDAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "repayLUSD",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_troveManagerAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_activePoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_defaultPoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_stabilityPoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_gasPoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_collSurplusPoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_priceFeedAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_sortedTrovesAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lusdTokenAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lqtyStakingAddress",
+            "type": "address"
+          }
+        ],
+        "name": "setAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_collTokenAddress",
+            "type": "address"
+          }
+        ],
+        "name": "setCollToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "sortedTroves",
+        "outputs": [
+          {
+            "internalType": "contract ISortedTroves",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "troveManager",
+        "outputs": [
+          {
+            "internalType": "contract ITroveManager",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_collWithdrawal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "withdrawColl",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_maxFeePercentage",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_LUSDAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "withdrawLUSD",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ],
     "stabilityPool": [
       {
         "anonymous": false,
@@ -3788,6 +4628,1261 @@
         "type": "receive"
       }
     ],
+    "stabilityPoolERC20": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newActivePoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "ActivePoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newBorrowerOperationsAddress",
+            "type": "address"
+          }
+        ],
+        "name": "BorrowerOperationsAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newCommunityIssuanceAddress",
+            "type": "address"
+          }
+        ],
+        "name": "CommunityIssuanceAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newDefaultPoolAddress",
+            "type": "address"
+          }
+        ],
+        "name": "DefaultPoolAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_P",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_S",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_G",
+            "type": "uint256"
+          }
+        ],
+        "name": "DepositSnapshotUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_ETH",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_LUSDLoss",
+            "type": "uint256"
+          }
+        ],
+        "name": "ETHGainWithdrawn",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "EtherSent",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_kickbackRate",
+            "type": "uint256"
+          }
+        ],
+        "name": "FrontEndRegistered",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_P",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_G",
+            "type": "uint256"
+          }
+        ],
+        "name": "FrontEndSnapshotUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_newFrontEndStake",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          }
+        ],
+        "name": "FrontEndStakeChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          }
+        ],
+        "name": "FrontEndTagSet",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_G",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_scale",
+            "type": "uint256"
+          }
+        ],
+        "name": "G_Updated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_LQTY",
+            "type": "uint256"
+          }
+        ],
+        "name": "LQTYPaidToDepositor",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_LQTY",
+            "type": "uint256"
+          }
+        ],
+        "name": "LQTYPaidToFrontEnd",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newLUSDTokenAddress",
+            "type": "address"
+          }
+        ],
+        "name": "LUSDTokenAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_P",
+            "type": "uint256"
+          }
+        ],
+        "name": "P_Updated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newPriceFeedAddress",
+            "type": "address"
+          }
+        ],
+        "name": "PriceFeedAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_S",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_scale",
+            "type": "uint256"
+          }
+        ],
+        "name": "S_Updated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_currentScale",
+            "type": "uint256"
+          }
+        ],
+        "name": "ScaleUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newSortedTrovesAddress",
+            "type": "address"
+          }
+        ],
+        "name": "SortedTrovesAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_newBalance",
+            "type": "uint256"
+          }
+        ],
+        "name": "StabilityPoolETHBalanceUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_newBalance",
+            "type": "uint256"
+          }
+        ],
+        "name": "StabilityPoolLUSDBalanceUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_newTroveManagerAddress",
+            "type": "address"
+          }
+        ],
+        "name": "TroveManagerAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_newDeposit",
+            "type": "uint256"
+          }
+        ],
+        "name": "UserDepositChanged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "BORROWING_FEE_FLOOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "CCR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "DECIMAL_PRECISION",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "LUSD_GAS_COMPENSATION",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "MCR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "MIN_NET_DEBT",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "NAME",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "P",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "PERCENT_DIVISOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "SCALE_FACTOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "_100pct",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "activePool",
+        "outputs": [
+          {
+            "internalType": "contract IActivePool",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "borrowerOperations",
+        "outputs": [
+          {
+            "internalType": "contract IBorrowerOperationsERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "collToken",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "communityIssuance",
+        "outputs": [
+          {
+            "internalType": "contract ICommunityIssuance",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "currentScale",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "defaultPool",
+        "outputs": [
+          {
+            "internalType": "contract IDefaultPool",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "depositSnapshots",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "S",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "P",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "G",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "scale",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "deposits",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "initialValue",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "frontEndTag",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "frontEndSnapshots",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "S",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "P",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "G",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "scale",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "frontEndStakes",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "frontEnds",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "kickbackRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "registered",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          }
+        ],
+        "name": "getCompoundedFrontEndStake",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          }
+        ],
+        "name": "getCompoundedLUSDDeposit",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          }
+        ],
+        "name": "getDepositorETHGain",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_depositor",
+            "type": "address"
+          }
+        ],
+        "name": "getDepositorLQTYGain",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getETH",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getEntireSystemColl",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "entireSystemColl",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getEntireSystemDebt",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "entireSystemDebt",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_frontEnd",
+            "type": "address"
+          }
+        ],
+        "name": "getFrontEndLQTYGain",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getMaxAmountToOffset",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "getTotalLUSDDeposits",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "isOwner",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lastETHError_Offset",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lastLQTYError",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lastLUSDLossError_Offset",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "lusdToken",
+        "outputs": [
+          {
+            "internalType": "contract ILUSDToken",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_debtToOffset",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_collToAdd",
+            "type": "uint256"
+          }
+        ],
+        "name": "offset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "priceFeed",
+        "outputs": [
+          {
+            "internalType": "contract IPriceFeed",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_frontEndTag",
+            "type": "address"
+          }
+        ],
+        "name": "provideToSP",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "receiveCollateral",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_kickbackRate",
+            "type": "uint256"
+          }
+        ],
+        "name": "registerFrontEnd",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "name": "scaleToG",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "name": "scaleToSum",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_borrowerOperationsAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_troveManagerAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_activePoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lusdTokenAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_sortedTrovesAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_priceFeedAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_communityIssuanceAddress",
+            "type": "address"
+          }
+        ],
+        "name": "setAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_collTokenAddress",
+            "type": "address"
+          }
+        ],
+        "name": "setCollToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "sortedTroves",
+        "outputs": [
+          {
+            "internalType": "contract ISortedTroves",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "troveManager",
+        "outputs": [
+          {
+            "internalType": "contract ITroveManager",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_upperHint",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_lowerHint",
+            "type": "address"
+          }
+        ],
+        "name": "withdrawETHGainToTrove",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "withdrawFromSP",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ],
     "orUSDToken": [
       {
         "inputs": [
@@ -3846,6 +5941,37 @@
           }
         ],
         "name": "BorrowerOperationsAddressChanged",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_troveManager",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_stabilityPool",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_borrowerOperations",
+            "type": "address"
+          }
+        ],
+        "name": "BranchRegistered",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [],
+        "name": "BranchRegistrarRenounced",
         "type": "event"
       },
       {
@@ -3999,6 +6125,19 @@
         "type": "function"
       },
       {
+        "inputs": [],
+        "name": "branchRegistrar",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
         "inputs": [
           {
             "internalType": "address",
@@ -4088,6 +6227,63 @@
           }
         ],
         "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "isBorrowerOperations",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "isStabilityPool",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "isTroveManager",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
         "type": "function"
       },
       {
@@ -4194,6 +6390,36 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_troveManagerAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_stabilityPoolAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_borrowerOperationsAddress",
+            "type": "address"
+          }
+        ],
+        "name": "registerBranch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "renounceBranchRegistrar",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       },
       {
@@ -6454,6 +8680,494 @@
         "outputs": [
           {
             "internalType": "contract TroveManager",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "mockWstETH": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "owner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "spender",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          }
+        ],
+        "name": "Approval",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "from",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          }
+        ],
+        "name": "Transfer",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "FAUCET_CAP",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "allowance",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_spender",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_value",
+            "type": "uint256"
+          }
+        ],
+        "name": "approve",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "balanceOf",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "faucet",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "name",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "stEthPerToken",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "symbol",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "totalSupply",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_value",
+            "type": "uint256"
+          }
+        ],
+        "name": "transfer",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_from",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_value",
+            "type": "uint256"
+          }
+        ],
+        "name": "transferFrom",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ],
+    "feeReceiver": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_F_ETH",
+            "type": "uint256"
+          }
+        ],
+        "name": "F_ETHUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_F_LUSD",
+            "type": "uint256"
+          }
+        ],
+        "name": "F_LUSDUpdated",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_token",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "FeesSwept",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "F_ETH",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "F_LUSD",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "NAME",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "borrowerOperationsAddress",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_ETHFee",
+            "type": "uint256"
+          }
+        ],
+        "name": "increaseF_ETH",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "_LUSDFee",
+            "type": "uint256"
+          }
+        ],
+        "name": "increaseF_LUSD",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "isOwner",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_troveManagerAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_borrowerOperationsAddress",
+            "type": "address"
+          }
+        ],
+        "name": "setAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_token",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          }
+        ],
+        "name": "sweep",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "troveManagerAddress",
+        "outputs": [
+          {
+            "internalType": "address",
             "name": "",
             "type": "address"
           }

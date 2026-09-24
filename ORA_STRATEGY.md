@@ -68,8 +68,17 @@
 - [x] `ora-mvp/`: modern Hardhat toolchain (Node 22), compiles the 0.6.11 core untouched
 - [x] Local testnet deployment script (full 14-contract wiring)
 - [x] New ORA web app: open Troves, mint orUSD, Stability Pool, liquidation demo
-- [ ] Phase 1: collateral branches + LST oracle adapters
-- [ ] Public testnet (Base Sepolia) deployment
-- [ ] Audit diff vs. upstream Liquity (keep the diff tiny = keep the audit cheap)
+- [x] **Phase 1: collateral branches** — multi-branch orUSD (`registerBranch`), full
+      ERC20-collateral pool suite (`ora-mvp/contracts/branches/`), wstETH branch live
+      on the local testnet with the ETH branch; `TroveManager` bytecode reused
+      unchanged across branches; end-to-end smoke test incl. cross-branch orUSD
+      fungibility and wstETH liquidations
+- [x] Base Sepolia deployment kit (`ora-mvp/DEPLOY_BASE_SEPOLIA.md`) — one-command
+      deploy from any open-internet machine (Arena sandbox blocks public RPCs)
+- [ ] Phase 1.5: real oracle adapters (Chainlink + LST rate feeds, depeg circuit
+      breakers) to replace testnet price feeds; frontend Base Sepolia switcher
+- [ ] Branch ORA incentives + per-branch fee distribution (Phase 2 tokenomics)
+- [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
+      ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 
 > Legacy note: the original `packages/*` toolchain (Node 14–16, Docker/OpenEthereum) is kept for reference and upstream diffing; active development happens in `ora-mvp/` against the same contracts. Internal contract identifiers retain upstream names (LUSDToken, LQTYToken…) to keep the security-relevant diff vs. audited Liquity minimal — only user-facing name/symbol changed.

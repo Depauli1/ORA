@@ -87,3 +87,8 @@ tr.liq td { background: rgba(255, 93, 108, 0.06); }
   box-shadow: 0 8px 30px rgba(0,0,0,0.5); z-index: 10;
 }
 footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+
+.branchbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.tab { padding: 8px 22px; border-radius: 9px; font-weight: 600; }
+.tab.active { background: linear-gradient(90deg, var(--amber), #d98d10); color: #17110a; border-color: transparent; }
+.new { font-size: 9px; background: var(--green); color: #08130c; border-radius: 5px; padding: 2px 5px; margin-left: 4px; vertical-align: middle; }

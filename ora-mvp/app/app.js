@@ -1,10 +1,9 @@
-/* ORA Protocol — testnet MVP frontend (ethers v6, served locally) */
+/* ORA Protocol — Phase 1 frontend: multi-branch (ETH + wstETH) */
 "use strict";
 
 const $ = id => document.getElementById(id);
 const Z = "0x0000000000000000000000000000000000000000";
-const MAX_FEE = ethers.parseEther("0.05"); // 5% max fee tolerance
-const GAS_COMP = 200n * 10n ** 18n;        // 200 orUSD gas compensation
+const MAX_FEE = ethers.parseEther("0.05");
 const MCR = 1.1;
 
 // Well-known hardhat testnet keys (public, demo only)
@@ -16,11 +15,14 @@ const ACCOUNTS = {
 const TREASURY_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a";
 
 let provider, wallet, treasury, dep, C = {}, price = 0, busy = false;
+let branch = "ETH";
 
 const fmt = (v, d = 2) =>
   Number(ethers.formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: d });
 const fmtUsd = (v, d = 2) => "$" + fmt(v, d);
 const short = a => a.slice(0, 6) + "…" + a.slice(-4);
+const isNative = () => dep.branches[branch].native;
+const collSym = () => dep.branches[branch].collSymbol;
 
 function toast(msg, ms = 4200) {
   const t = $("toast");
@@ -53,34 +55,61 @@ async function tx(label, fn) {
 }
 
 function connectContracts(signer) {
-  const A = dep.addresses, B = dep.abis;
-  C.priceFeed = new ethers.Contract(A.priceFeed, B.priceFeed, signer);
-  C.troveManager = new ethers.Contract(A.troveManager, B.troveManager, signer);
-  C.borrowerOps = new ethers.Contract(A.borrowerOperations, B.borrowerOperations, signer);
-  C.stabilityPool = new ethers.Contract(A.stabilityPool, B.stabilityPool, signer);
-  C.orUSD = new ethers.Contract(A.orUSDToken, B.orUSDToken, signer);
-  C.ora = new ethers.Contract(A.oraToken, B.oraToken, signer);
-  C.staking = new ethers.Contract(A.oraStaking, B.oraStaking, signer);
-  C.multiGetter = new ethers.Contract(A.multiTroveGetter, B.multiTroveGetter, signer);
+  const B = dep.branches[branch], S = dep.shared, A = dep.abis;
+  C.priceFeed = new ethers.Contract(B.priceFeed, A.priceFeed, signer);
+  C.troveManager = new ethers.Contract(B.troveManager, A.troveManager, signer);
+  C.borrowerOps = new ethers.Contract(
+    B.borrowerOperations,
+    B.native ? A.borrowerOperations : A.borrowerOperationsERC20,
+    signer);
+  C.stabilityPool = new ethers.Contract(
+    B.stabilityPool,
+    B.native ? A.stabilityPool : A.stabilityPoolERC20,
+    signer);
+  C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, signer);
+  C.collToken = B.native ? null : new ethers.Contract(B.collToken, A.mockWstETH, signer);
+  C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, signer);
+  C.ora = new ethers.Contract(S.oraToken, A.oraToken, signer);
+  C.staking = new ethers.Contract(S.oraStaking, A.oraStaking, signer);
 }
 
 function setAccount(name) {
   const w = new ethers.Wallet(ACCOUNTS[name], provider);
   wallet = new ethers.NonceManager(w);
-  wallet.address = w.address; // convenience for display/lookups
+  wallet.address = w.address;
   connectContracts(wallet);
   $("addr").textContent = w.address;
+}
+
+function setBranch(name) {
+  branch = name;
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.branch === name));
+  document.querySelectorAll(".collsym").forEach(el => (el.textContent = collSym()));
+  $("btnWstFaucet").style.display = isNative() ? "none" : "inline-block";
+  $("balWst").style.display = isNative() ? "none" : "inline";
+  connectContracts(wallet);
+}
+
+// Ensure the branch BorrowerOperations may pull our collateral tokens
+async function ensureAllowance(needed) {
+  const allowance = await C.collToken.allowance(wallet.address, dep.branches[branch].borrowerOperations);
+  if (allowance < needed) {
+    toast("Approving " + collSym() + "…", 30000);
+    const t = await C.collToken.approve(dep.branches[branch].borrowerOperations, ethers.MaxUint256);
+    await t.wait();
+  }
 }
 
 async function refresh() {
   try {
     const me = wallet.address;
-    const [p, tcr, recovery, supply, nTroves, spTotal, rate,
-           ethBal, orusdBal, oraBal, trove, entire,
+    const p = await C.priceFeed.getPrice();
+    const [tcr, recovery, supply, nTroves, spTotal, rate,
+           ethBal, orusdBal, oraBal, wstBal, trove, entire,
            spDep, spEth, spOra, stake, stkEth, stkOrusd] = await Promise.all([
-      C.priceFeed.getPrice(),
-      C.troveManager.getTCR(await C.priceFeed.getPrice()),
-      C.troveManager.checkRecoveryMode(await C.priceFeed.getPrice()),
+      C.troveManager.getTCR(p),
+      C.troveManager.checkRecoveryMode(p),
       C.orUSD.totalSupply(),
       C.troveManager.getTroveOwnersCount(),
       C.stabilityPool.getTotalLUSDDeposits(),
@@ -88,6 +117,7 @@ async function refresh() {
       provider.getBalance(me),
       C.orUSD.balanceOf(me),
       C.ora.balanceOf(me),
+      C.collToken ? C.collToken.balanceOf(me) : 0n,
       C.troveManager.Troves(me),
       C.troveManager.getEntireDebtAndColl(me),
       C.stabilityPool.getCompoundedLUSDDeposit(me),
@@ -100,7 +130,6 @@ async function refresh() {
 
     price = Number(ethers.formatEther(p));
 
-    // Stats bar
     $("stEthPrice").textContent = fmtUsd(p);
     $("stTcr").textContent = nTroves > 0n ? (Number(tcr) / 1e16).toFixed(1) + "%" : "—";
     $("stMode").textContent = recovery ? "RECOVERY" : "Normal";
@@ -111,12 +140,11 @@ async function refresh() {
     $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
     $("simPrice").textContent = fmtUsd(p);
 
-    // Balances
     $("balEth").textContent = fmt(ethBal) + " ETH";
     $("balOrusd").textContent = fmt(orusdBal) + " orUSD";
     $("balOra").textContent = fmt(oraBal) + " ORA";
+    if (C.collToken) $("balWst").textContent = fmt(wstBal) + " wstETH";
 
-    // Trove panel
     const active = trove.status === 1n;
     $("troveNone").style.display = active ? "none" : "block";
     $("troveActive").style.display = active ? "block" : "none";
@@ -124,7 +152,7 @@ async function refresh() {
       const debt = entire[0], coll = entire[1];
       const icr = Number(coll) * price / Number(debt) * 100;
       const liqPrice = Number(ethers.formatEther(debt)) * MCR / Number(ethers.formatEther(coll));
-      $("tvColl").textContent = fmt(coll, 4) + " ETH";
+      $("tvColl").textContent = fmt(coll, 4) + " " + collSym();
       $("tvDebt").textContent = fmt(debt) + " orUSD";
       $("tvIcr").textContent = icr.toFixed(1) + "%";
       $("tvIcr").className = icr < 120 ? "bad" : icr < 150 ? "warn" : "good";
@@ -132,14 +160,12 @@ async function refresh() {
     }
     updateOpenPreview(rate);
 
-    // Stability pool
     $("spDeposit").textContent = fmt(spDep) + " orUSD";
-    $("spEthGain").textContent = fmt(spEth, 5) + " ETH";
-    $("spOraGain").textContent = fmt(spOra, 3) + " ORA";
+    $("spEthGain").textContent = fmt(spEth, 5) + " " + collSym();
+    $("spOraGain").textContent = isNative() ? fmt(spOra, 3) + " ORA" : "— (Phase 2)";
     $("spShare").textContent = spTotal > 0n
       ? (Number(spDep) / Number(spTotal) * 100).toFixed(2) + "%" : "0%";
 
-    // Staking
     $("stkAmount").textContent = fmt(stake) + " ORA";
     $("stkEth").textContent = fmt(stkEth, 5) + " ETH";
     $("stkOrusd").textContent = fmt(stkOrusd, 3) + " orUSD";
@@ -175,7 +201,7 @@ async function refreshTrovesTable() {
     if (liq) tr.className = "liq";
     tr.innerHTML =
       `<td title="${owner}">${short(owner)}${owner === wallet.address ? " (you)" : ""}</td>` +
-      `<td>${fmt(coll, 3)} ETH</td><td>${fmt(debt, 0)} orUSD</td>` +
+      `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
       `<td class="${liq ? "bad" : icr < 150 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
       `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button></td>`;
     tbody.appendChild(tr);
@@ -192,18 +218,36 @@ async function main() {
   dep = await (await fetch("deployment.json")).json();
   treasury = new ethers.NonceManager(new ethers.Wallet(TREASURY_KEY, provider));
   setAccount("alice");
+  setBranch("ETH");
 
   $("accountSelect").addEventListener("change", e => { setAccount(e.target.value); refresh(); });
+  document.querySelectorAll(".tab").forEach(t =>
+    t.addEventListener("click", () => { setBranch(t.dataset.branch); refresh(); }));
   ["openColl", "openDebt"].forEach(id => $(id).addEventListener("input", () => updateOpenPreview()));
 
-  $("btnOpen").addEventListener("click", () =>
-    tx("Open Trove", () => C.borrowerOps.openTrove(
-      MAX_FEE, ethers.parseEther($("openDebt").value || "0"), Z, Z,
-      { value: ethers.parseEther($("openColl").value || "0") })));
+  $("btnWstFaucet").addEventListener("click", () =>
+    tx("wstETH faucet", () => C.collToken.faucet(ethers.parseEther("10"))));
+
+  $("btnOpen").addEventListener("click", async () => {
+    const coll = ethers.parseEther($("openColl").value || "0");
+    const debt = ethers.parseEther($("openDebt").value || "0");
+    if (isNative()) {
+      tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, Z, Z, { value: coll }));
+    } else {
+      try { await ensureAllowance(coll); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
+      tx("Open Trove", () => C.borrowerOps.openTrove(MAX_FEE, debt, coll, Z, Z));
+    }
+  });
 
   const adj = () => ethers.parseEther($("adjAmount").value || "0");
-  $("btnAddColl").addEventListener("click", () =>
-    tx("Add collateral", () => C.borrowerOps.addColl(Z, Z, { value: adj() })));
+  $("btnAddColl").addEventListener("click", async () => {
+    if (isNative()) {
+      tx("Add collateral", () => C.borrowerOps.addColl(Z, Z, { value: adj() }));
+    } else {
+      try { await ensureAllowance(adj()); } catch (e) { return toast("Approve failed: " + reason(e), 8000); }
+      tx("Add collateral", () => C.borrowerOps.addColl(adj(), Z, Z));
+    }
+  });
   $("btnWithdrawColl").addEventListener("click", () =>
     tx("Withdraw collateral", () => C.borrowerOps.withdrawColl(adj(), Z, Z)));
   $("btnBorrowMore").addEventListener("click", () =>
@@ -230,13 +274,13 @@ async function main() {
   document.querySelectorAll("button[data-bump]").forEach(b =>
     b.addEventListener("click", () => {
       const newPrice = price * (1 + Number(b.dataset.bump) / 100);
-      tx(`Set ETH price to $${newPrice.toFixed(0)}`,
+      tx(`Set ${collSym()} price to $${newPrice.toFixed(0)}`,
         () => C.priceFeed.setPrice(ethers.parseEther(newPrice.toFixed(6))));
     }));
   $("btnSetPrice").addEventListener("click", () => {
     const v = parseFloat($("simInput").value);
     if (!v || v <= 0) return toast("Enter a valid price");
-    tx(`Set ETH price to $${v}`, () => C.priceFeed.setPrice(ethers.parseEther(String(v))));
+    tx(`Set ${collSym()} price to $${v}`, () => C.priceFeed.setPrice(ethers.parseEther(String(v))));
   });
 
   await refresh();

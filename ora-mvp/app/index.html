@@ -26,13 +26,14 @@
       <span id="balEth">— ETH</span>
       <span id="balOrusd" class="orusd">— orUSD</span>
       <span id="balOra" class="ora">— ORA</span>
+      <span id="balWst" style="display:none">— wstETH</span>
     </div>
     <div class="addr" id="addr">—</div>
   </div>
 </header>
 
 <section class="stats" id="stats">
-  <div class="stat"><label>ETH Price</label><b id="stEthPrice">—</b></div>
+  <div class="stat"><label><span class="collsym">ETH</span> Price</label><b id="stEthPrice">—</b></div>
   <div class="stat"><label>TCR</label><b id="stTcr">—</b></div>
   <div class="stat"><label>Mode</label><b id="stMode">—</b></div>
   <div class="stat"><label>orUSD Supply</label><b id="stSupply">—</b></div>
@@ -41,15 +42,22 @@
   <div class="stat"><label>Borrow Fee</label><b id="stFee">—</b></div>
 </section>
 
+<div class="branchbar">
+  <span class="hint">Collateral branch:</span>
+  <button class="tab active" id="tabETH" data-branch="ETH">ETH</button>
+  <button class="tab" id="tabWstETH" data-branch="wstETH">wstETH <span class="new">Phase 1</span></button>
+  <button class="mini" id="btnWstFaucet" style="display:none">Get 10 test wstETH</button>
+</div>
+
 <main>
   <!-- TROVE -->
   <div class="card" id="troveCard">
-    <h2>My Trove <span class="hint">borrow orUSD against ETH · 0% interest</span></h2>
+    <h2>My Trove <span class="hint">borrow orUSD against <b class="collsym">ETH</b> · 0% interest</span></h2>
 
     <div id="troveNone">
       <div class="row">
         <div class="field">
-          <label>Collateral (ETH)</label>
+          <label>Collateral (<span class="collsym">ETH</span>)</label>
           <input id="openColl" type="number" value="5" min="0" step="0.1" />
         </div>
         <div class="field">
@@ -72,8 +80,8 @@
         <div class="field"><label>Amount</label><input id="adjAmount" type="number" value="1" min="0" step="0.1" /></div>
       </div>
       <div class="btnrow">
-        <button id="btnAddColl">Add ETH</button>
-        <button id="btnWithdrawColl">Withdraw ETH</button>
+        <button id="btnAddColl">Add <span class="collsym">ETH</span></button>
+        <button id="btnWithdrawColl">Withdraw <span class="collsym">ETH</span></button>
         <button id="btnBorrowMore">Borrow orUSD</button>
         <button id="btnRepay">Repay orUSD</button>
       </div>
@@ -86,7 +94,7 @@
     <h2>Stability Pool <span class="hint">earn liquidation ETH + ORA rewards</span></h2>
     <div class="kv">
       <div><label>My Deposit</label><b id="spDeposit">—</b></div>
-      <div><label>ETH Gain</label><b id="spEthGain">—</b></div>
+      <div><label><span class="collsym">ETH</span> Gain</label><b id="spEthGain">—</b></div>
       <div><label>ORA Reward</label><b id="spOraGain">—</b></div>
       <div><label>Pool Share</label><b id="spShare">—</b></div>
     </div>
@@ -121,7 +129,7 @@
   <div class="card wide">
     <h2>Market Simulator <span class="hint">testnet oracle control — crash the market, run liquidations</span></h2>
     <div class="simrow">
-      <span>ETH price:</span> <b id="simPrice">—</b>
+      <span><span class="collsym">ETH</span> price:</span> <b id="simPrice">—</b>
       <button class="mini" data-bump="-10">−10%</button>
       <button class="mini" data-bump="-5">−5%</button>
       <button class="mini" data-bump="5">+5%</button>
@@ -137,7 +145,7 @@
 </main>
 
 <div id="toast"></div>
-<footer>ORA Protocol MVP — Liquity-engine core, modern stack. Local testnet · chain 31337. Not financial advice; demo keys are public.</footer>
+<footer>ORA Protocol MVP — Liquity-engine core, modern stack. Local testnet · chain 31337 · ETH + wstETH collateral branches. Not financial advice; demo keys are public.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
 <script src="app.js"></script>

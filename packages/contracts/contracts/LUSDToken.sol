@@ -58,6 +58,19 @@ contract LUSDToken is CheckContract, ILUSDToken {
     address public immutable troveManagerAddress;
     address public immutable stabilityPoolAddress;
     address public immutable borrowerOperationsAddress;
+
+    // --- ORA Phase 1: multi-branch collateral support ---
+    // orUSD can be minted/burned by multiple registered collateral branches
+    // (e.g. native ETH branch, wstETH branch). The constructor registers the
+    // first branch; further branches are added by the registrar, which can
+    // (and should, post-launch) renounce this power.
+    mapping (address => bool) public isTroveManager;
+    mapping (address => bool) public isStabilityPool;
+    mapping (address => bool) public isBorrowerOperations;
+    address public branchRegistrar;
+
+    event BranchRegistered(address _troveManager, address _stabilityPool, address _borrowerOperations);
+    event BranchRegistrarRenounced();
     
     // --- Events ---
     event TroveManagerAddressChanged(address _troveManagerAddress);
@@ -84,6 +97,12 @@ contract LUSDToken is CheckContract, ILUSDToken {
 
         borrowerOperationsAddress = _borrowerOperationsAddress;        
         emit BorrowerOperationsAddressChanged(_borrowerOperationsAddress);
+
+        isTroveManager[_troveManagerAddress] = true;
+        isStabilityPool[_stabilityPoolAddress] = true;
+        isBorrowerOperations[_borrowerOperationsAddress] = true;
+        branchRegistrar = msg.sender;
+        emit BranchRegistered(_troveManagerAddress, _stabilityPoolAddress, _borrowerOperationsAddress);
         
         bytes32 hashedName = keccak256(bytes(_NAME));
         bytes32 hashedVersion = keccak256(bytes(_VERSION));
@@ -92,6 +111,26 @@ contract LUSDToken is CheckContract, ILUSDToken {
         _HASHED_VERSION = hashedVersion;
         _CACHED_CHAIN_ID = _chainID();
         _CACHED_DOMAIN_SEPARATOR = _buildDomainSeparator(_TYPE_HASH, hashedName, hashedVersion);
+    }
+
+    // --- ORA Phase 1: branch registration ---
+
+    function registerBranch(address _troveManagerAddress, address _stabilityPoolAddress, address _borrowerOperationsAddress) external {
+        require(msg.sender == branchRegistrar, "LUSD: caller is not the branch registrar");
+        checkContract(_troveManagerAddress);
+        checkContract(_stabilityPoolAddress);
+        checkContract(_borrowerOperationsAddress);
+
+        isTroveManager[_troveManagerAddress] = true;
+        isStabilityPool[_stabilityPoolAddress] = true;
+        isBorrowerOperations[_borrowerOperationsAddress] = true;
+        emit BranchRegistered(_troveManagerAddress, _stabilityPoolAddress, _borrowerOperationsAddress);
+    }
+
+    function renounceBranchRegistrar() external {
+        require(msg.sender == branchRegistrar, "LUSD: caller is not the branch registrar");
+        branchRegistrar = address(0);
+        emit BranchRegistrarRenounced();
     }
 
     // --- Functions for intra-Liquity calls ---
@@ -252,33 +291,33 @@ contract LUSDToken is CheckContract, ILUSDToken {
             "LUSD: Cannot transfer tokens directly to the LUSD token contract or the zero address"
         );
         require(
-            _recipient != stabilityPoolAddress && 
-            _recipient != troveManagerAddress && 
-            _recipient != borrowerOperationsAddress, 
+            !isStabilityPool[_recipient] && 
+            !isTroveManager[_recipient] && 
+            !isBorrowerOperations[_recipient], 
             "LUSD: Cannot transfer tokens directly to the StabilityPool, TroveManager or BorrowerOps"
         );
     }
 
     function _requireCallerIsBorrowerOperations() internal view {
-        require(msg.sender == borrowerOperationsAddress, "LUSDToken: Caller is not BorrowerOperations");
+        require(isBorrowerOperations[msg.sender], "LUSDToken: Caller is not BorrowerOperations");
     }
 
     function _requireCallerIsBOorTroveMorSP() internal view {
         require(
-            msg.sender == borrowerOperationsAddress ||
-            msg.sender == troveManagerAddress ||
-            msg.sender == stabilityPoolAddress,
+            isBorrowerOperations[msg.sender] ||
+            isTroveManager[msg.sender] ||
+            isStabilityPool[msg.sender],
             "LUSD: Caller is neither BorrowerOperations nor TroveManager nor StabilityPool"
         );
     }
 
     function _requireCallerIsStabilityPool() internal view {
-        require(msg.sender == stabilityPoolAddress, "LUSD: Caller is not the StabilityPool");
+        require(isStabilityPool[msg.sender], "LUSD: Caller is not the StabilityPool");
     }
 
     function _requireCallerIsTroveMorSP() internal view {
         require(
-            msg.sender == troveManagerAddress || msg.sender == stabilityPoolAddress,
+            isTroveManager[msg.sender] || isStabilityPool[msg.sender],
             "LUSD: Caller is neither TroveManager nor StabilityPool");
     }
 

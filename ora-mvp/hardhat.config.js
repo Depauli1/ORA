@@ -24,6 +24,16 @@ subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {
   return runSuper(args);
 });
 
+// Deployer key for public testnets: ORA_DEPLOYER_KEY env var, or ora-mvp/.secret
+// (generate one with: node scripts/gen-deployer.js). NEVER use these keys on mainnet.
+const fs = require("fs");
+function deployerKey() {
+  if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
+  const p = path.join(__dirname, ".secret");
+  if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
+  return undefined;
+}
+
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
@@ -39,6 +49,11 @@ module.exports = {
     },
     localhost: {
       url: "http://127.0.0.1:8545"
+    },
+    baseSepolia: {
+      url: process.env.ORA_RPC_URL || "https://sepolia.base.org",
+      chainId: 84532,
+      accounts: deployerKey() ? [deployerKey()] : []
     }
   },
   paths: {

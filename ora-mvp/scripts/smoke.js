@@ -1,4 +1,4 @@
-// End-to-end smoke test through the app's RPC proxy (same path the browser uses).
+// End-to-end smoke test for BOTH branches, through the app's RPC proxy.
 const { ethers } = require("ethers");
 const dep = require("../app/deployment.json");
 
@@ -17,48 +17,62 @@ async function main() {
   const alice = new ethers.NonceManager(new ethers.Wallet(KEYS.alice, provider));
   const carol = new ethers.NonceManager(new ethers.Wallet(KEYS.carol, provider));
   const treasury = new ethers.NonceManager(new ethers.Wallet(KEYS.treasury, provider));
+  const aliceAddr = await alice.getAddress();
 
-  const bo = new ethers.Contract(dep.addresses.borrowerOperations, dep.abis.borrowerOperations, alice);
-  const tm = new ethers.Contract(dep.addresses.troveManager, dep.abis.troveManager, carol);
-  const sp = new ethers.Contract(dep.addresses.stabilityPool, dep.abis.stabilityPool, alice);
-  const pf = new ethers.Contract(dep.addresses.priceFeed, dep.abis.priceFeed, treasury);
-  const usd = new ethers.Contract(dep.addresses.orUSDToken, dep.abis.orUSDToken, provider);
-  const ora = new ethers.Contract(dep.addresses.oraToken, dep.abis.oraToken, treasury);
-  const stk = new ethers.Contract(dep.addresses.oraStaking, dep.abis.oraStaking, alice);
+  const usd = new ethers.Contract(dep.shared.orUSDToken, dep.abis.orUSDToken, provider);
+  console.log("orUSD:", await usd.name(), "| branch registrar:", await usd.branchRegistrar());
 
-  console.log("orUSD token:", await usd.name(), "/", await usd.symbol());
-  console.log("ORA token:  ", await ora.name(), "/", await ora.symbol());
+  // ===== Branch 1: native ETH sanity =====
+  const B1 = dep.branches.ETH;
+  const bo1 = new ethers.Contract(B1.borrowerOperations, dep.abis.borrowerOperations, alice);
+  await (await bo1.openTrove(E("0.05"), E("4000"), Z, Z, { value: E("5") })).wait();
+  console.log("[ETH] Alice opened trove — orUSD:", f(await usd.balanceOf(aliceAddr)));
 
-  // 1. Alice opens a trove: 5 ETH, borrow 4000 orUSD
-  await (await bo.openTrove(E("0.05"), E("4000"), Z, Z, { value: E("5") })).wait();
-  console.log("1. Alice opened trove — orUSD balance:", f(await usd.balanceOf(await alice.getAddress())));
+  // ===== Branch 2: wstETH lifecycle =====
+  const B2 = dep.branches.wstETH;
+  const wst = new ethers.Contract(B2.collToken, dep.abis.mockWstETH, alice);
+  const bo2 = new ethers.Contract(B2.borrowerOperations, dep.abis.borrowerOperationsERC20, alice);
+  const sp2 = new ethers.Contract(B2.stabilityPool, dep.abis.stabilityPoolERC20, alice);
+  const tm2 = new ethers.Contract(B2.troveManager, dep.abis.troveManager, carol);
+  const pf2 = new ethers.Contract(B2.priceFeed, dep.abis.priceFeed, treasury);
 
-  // 2. Alice deposits 2000 orUSD to the Stability Pool
-  await (await sp.provideToSP(E("2000"), Z)).wait();
-  console.log("2. Alice SP deposit:", f(await sp.getCompoundedLUSDDeposit(await alice.getAddress())));
+  // faucet + approve + open trove
+  await (await wst.faucet(E("10"))).wait();
+  await (await wst.approve(B2.borrowerOperations, ethers.MaxUint256)).wait();
+  await (await bo2.openTrove(E("0.05"), E("6000"), E("6"), Z, Z)).wait();
+  console.log("[wstETH] Alice opened trove: 6 wstETH / 6000 orUSD — orUSD bal:", f(await usd.balanceOf(aliceAddr)));
 
-  // 3. Faucet: treasury sends Alice 100 ORA, Alice stakes it
-  await (await ora.transfer(await alice.getAddress(), E("100"))).wait();
-  await (await stk.stake(E("100"))).wait();
-  console.log("3. Alice staked 100 ORA — stake:", f(await stk.stakes(await alice.getAddress())));
+  // adjust: add collateral + repay
+  await (await bo2.addColl(E("1"), Z, Z)).wait();
+  await (await bo2.repayLUSD(E("500"), Z, Z)).wait();
+  const ent = await tm2.getEntireDebtAndColl(aliceAddr);
+  console.log("[wstETH] after adjust — coll:", f(ent[1]), "debt:", f(ent[0]));
 
-  // 4. Crash ETH 15% -> $1700; the 3 ETH / ~5000 debt trove goes under 110%
-  await (await pf.setPrice(E("1700"))).wait();
-  const victim = "0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f";
-  const icr = await tm.getCurrentICR(victim, E("1700"));
-  console.log("4. Price crashed to $1700 — victim ICR:", (Number(icr) / 1e16).toFixed(1) + "%");
+  // SP deposit
+  await (await sp2.provideToSP(E("3000"), Z)).wait();
+  console.log("[wstETH] Alice SP deposit:", f(await sp2.getCompoundedLUSDDeposit(aliceAddr)));
 
-  // 5. Carol liquidates
-  await (await tm.liquidate(victim)).wait();
-  console.log("5. Liquidated! Troves left:", (await tm.getTroveOwnersCount()).toString());
-  console.log("   Alice SP ETH gain:", f(await sp.getDepositorETHGain(await alice.getAddress())), "ETH");
-  console.log("   Alice SP ORA gain:", f(await sp.getDepositorLQTYGain(await alice.getAddress())), "ORA");
-  console.log("   Alice staking orUSD fees:", f(await stk.getPendingLUSDGain(await alice.getAddress())));
+  // crash wstETH 20% -> $1920; the 2.5 wstETH / ~5000 debt trove sinks
+  await (await pf2.setPrice(E("1920"))).wait();
+  const victim = "0x71bE63f3384f5fb98995898A86B02Fb2426c5788"; // signer 11
+  const icr = await tm2.getCurrentICR(victim, E("1920"));
+  console.log("[wstETH] crashed to $1920 — victim ICR:", (Number(icr) / 1e16).toFixed(1) + "%");
+  await (await tm2.liquidate(victim)).wait();
+  console.log("[wstETH] liquidated! Alice SP wstETH gain:", f(await sp2.getDepositorETHGain(aliceAddr)));
 
-  // 6. Restore price for the live demo
-  await (await pf.setPrice(E("2000"))).wait();
-  console.log("6. Price restored to $2000 — TCR:", (Number(await tm.getTCR(E("2000"))) / 1e16).toFixed(1) + "%");
-  console.log("\nSMOKE TEST PASSED ✓");
+  // withdraw gains (moves wstETH to Alice's wallet)
+  await (await sp2.withdrawFromSP(E("0"))).wait();
+  console.log("[wstETH] Alice wstETH balance after claiming:", f(await wst.balanceOf(aliceAddr)));
+
+  // cross-branch: orUSD minted on wstETH branch repays ETH-branch trove
+  await (await bo1.repayLUSD(E("1000"), Z, Z)).wait();
+  console.log("[cross] repaid 1000 orUSD (minted on wstETH branch) into ETH-branch trove ✓");
+
+  // restore price
+  await (await pf2.setPrice(E("2400"))).wait();
+  console.log("[wstETH] price restored — branch TCR:", (Number(await tm2.getTCR(E("2400"))) / 1e16).toFixed(1) + "%");
+
+  console.log("\nPHASE 1 SMOKE TEST PASSED ✓");
 }
 
 main().catch(e => { console.error("SMOKE TEST FAILED:", e.shortMessage || e.message); process.exit(1); });
