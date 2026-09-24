@@ -17,7 +17,11 @@ const REAL_FEEDS = {
     ethUsd: process.env.ORA_ETHUSD_FEED || "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1"
   }
 };
-const ORACLE_TIMEOUT = 48 * 3600; // generous staleness window for testnets
+// Per-feed heartbeats (staleness windows). Testnet defaults are generous;
+// on mainnet set tight values via env: ETH/USD heartbeat is 1h on L1 /
+// 20 min on Base, stETH/ETH is 24h (Chainlink docs) — use heartbeat + margin.
+const ETHUSD_TIMEOUT = Number(process.env.ORA_ETHUSD_HEARTBEAT || 48 * 3600);
+const STETHETH_TIMEOUT = Number(process.env.ORA_STETHETH_HEARTBEAT || 48 * 3600);
 
 // Phase 4 — RWA branch parameters
 const RWA_ORACLE_TIMEOUT = 72 * 3600;                 // daily NAV + weekend cover
@@ -61,7 +65,7 @@ async function main() {
       const [, answer, , updatedAt] = await probe.latestRoundData();
       const dec = await probe.decimals();
       const age = Math.floor(Date.now() / 1000) - Number(updatedAt);
-      if (answer <= 0n || age > ORACLE_TIMEOUT) throw new Error(`bad answer ${answer} / age ${age}s`);
+      if (answer <= 0n || age > ETHUSD_TIMEOUT) throw new Error(`bad answer ${answer} / age ${age}s`);
       ethUsdAggregatorAddr = candidate;
       ethUsdSettable = false;
       console.log(`  using real Chainlink ETH/USD: ${candidate}` +
@@ -82,9 +86,39 @@ async function main() {
   // (also powers the depeg circuit-breaker demo).
   const aggStEthEth = await deploy("SettableAggregator", 18, "stETH / ETH", ethers.parseEther("1"));
 
-  const priceFeed = await deploy("ChainlinkPriceFeed", ethUsdAggregatorAddr, ORACLE_TIMEOUT);
+  // L2 sequencer-uptime guard (answer 0 = up, 1 = down; 1h grace after restart).
+  // Public L2s: real Chainlink uptime feed via ORA_SEQUENCER_FEED (probed).
+  // Local: settable mock (answer 0), aged past the grace period -> also powers
+  // the sequencer-outage demo. Base MAINNET feed for later:
+  // 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433
+  let sequencerFeedAddr = ethers.ZeroAddress;
+  let sequencerSettable = false;
+  if (REAL_FEEDS[network.name]) {
+    const cand = process.env.ORA_SEQUENCER_FEED;
+    if (cand) {
+      try {
+        const probe = new ethers.Contract(cand,
+          ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)"], ethers.provider);
+        const [, up] = await probe.latestRoundData();
+        sequencerFeedAddr = cand;
+        console.log(`  using L2 sequencer uptime feed: ${cand} (status ${up === 0n ? "UP" : "DOWN"})`);
+      } catch (e) {
+        console.log(`  WARNING: sequencer feed probe failed at ${cand} — guard disabled`);
+      }
+    } else {
+      console.log("  no ORA_SEQUENCER_FEED set — sequencer guard disabled (fine for testnets)");
+    }
+  } else {
+    const aggSeq = await deploy("SettableAggregator", 0, "L2 Sequencer Up", 0n);
+    await (await aggSeq.makeStale(2 * 3600)).wait(); // age past the 1h restart grace
+    sequencerFeedAddr = await a(aggSeq);
+    sequencerSettable = true;
+  }
+
+  const priceFeed = await deploy("ChainlinkPriceFeed", ethUsdAggregatorAddr, ETHUSD_TIMEOUT, sequencerFeedAddr);
   const priceFeed2 = await deploy("WstETHPriceFeed",
-    ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH), ORACLE_TIMEOUT);
+    ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH),
+    ETHUSD_TIMEOUT, STETHETH_TIMEOUT, sequencerFeedAddr);
 
   // Phase 4: tokenized T-bill fund (RWA). NAV per share starts at $1.05; on
   // mainnet the aggregator would be the fund administrator's NAV oracle.
@@ -376,6 +410,8 @@ async function main() {
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     deployer: deployer.address,
     shared: {
+      sequencerUptimeFeed: sequencerFeedAddr,
+      sequencerSettable,
       orUSDToken: await a(orUSD),
       oraToken: await a(oraToken),
       oraStaking: await a(oraStaking),

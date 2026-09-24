@@ -70,8 +70,9 @@ delta, not the file.
 | `zap/OraSwapPool.sol` | 83 | demo x·y=k AMM, 0.3% fee (**testnet-only venue**) | k never decreases (fuzzed); no LP withdrawal path by design |
 | `branches/BranchStaking.sol` | 262 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
 | `branches/BranchCommunityIssuance.sol` | 91 | per-branch capped ORA issuance | cap locked at `activate()` |
-| `oracles/ChainlinkPriceFeed.sol` (+Reader) | 108 | Chainlink adapter w/ staleness fallback | constructor reverts on invalid/stale feed |
-| `oracles/WstETHPriceFeed.sol` | 142 | ETH/USD × stETH/ETH × wstETH rate; **depeg circuit breaker** <0.96 | breaker is sticky until peg recovers |
+| `oracles/ChainlinkPriceFeed.sol` (+Reader) | 125 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
+| `oracles/SequencerGuard.sol` | 60 | Chainlink L2 sequencer-uptime check (answer 0=up, 1h restart grace), optional via address(0) | outage/grace ⇒ oracle down, lastGoodPrice served |
+| `oracles/WstETHPriceFeed.sol` | 155 | ETH/USD × stETH/ETH × wstETH rate; **depeg circuit breaker** <0.96; **per-feed heartbeats** + sequencer guard | breaker sticky until peg recovers; either feed stale ⇒ fallback |
 | `oracles/RWAPriceFeed.sol` | 113 | NAV oracle: **+2%/fetch upside ratchet**, break-the-buck shock flag, 72h staleness | ratchet cannot be bypassed by the view path |
 | `oracles/SettableAggregator.sol` | 59 | testnet mock feed | testnet only |
 | Mocks (`MockWstETH`, `MockTBill`) | ~90 | testnet collateral faucets | testnet only |
@@ -101,7 +102,8 @@ delta, not the file.
 
 ## Verification pointers
 
-- `npm test` — 56 tests incl. fuzz (custody, k-invariant, accrual math, zap round trips)
+- `npm test` — 64 tests incl. fuzz (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness)
+- `scripts/watch-invariants.js` — live-deployment invariant monitor (solvency, custody, SP/vault/AMM backing, debt↔supply), wired to a 6h CI cron on Base Sepolia
 - `scripts/verify-tokenomics.js` — 47 on-chain claims (registrar renounce = prod)
 - `scripts/test-rwa-zap.js`, `scripts/smoke.js` — integration on a seeded chain
 - CI: `.github/workflows/ci.yml` — test suite + Slither (gate: no high-severity in Tier 3)

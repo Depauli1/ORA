@@ -2,11 +2,13 @@
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "shared": {
-    "orUSDToken": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
-    "oraToken": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
-    "oraStaking": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
-    "communityIssuance": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
-    "lockupFactory": "0x59b670e9fA9D0A427751Af201D676719a970857b"
+    "sequencerUptimeFeed": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "sequencerSettable": true,
+    "orUSDToken": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+    "oraToken": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+    "oraStaking": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+    "communityIssuance": "0x59b670e9fA9D0A427751Af201D676719a970857b",
+    "lockupFactory": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44"
   },
   "branches": {
     "ETH": {
@@ -15,19 +17,19 @@
       "mcr": 1.1,
       "ccr": 1.5,
       "softFloor": 1.05,
-      "priceFeed": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "priceFeed": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
       "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "ethUsdSettable": true,
-      "sortedTroves": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
-      "troveManager": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-      "activePool": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
-      "stabilityPool": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      "gasPool": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
-      "defaultPool": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
-      "collSurplusPool": "0x9A676e781A523b5d0C0e43731313A708CB607508",
-      "borrowerOperations": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
-      "hintHelpers": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
-      "multiTroveGetter": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE"
+      "sortedTroves": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      "troveManager": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+      "activePool": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "stabilityPool": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+      "gasPool": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+      "defaultPool": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+      "collSurplusPool": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
+      "borrowerOperations": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      "hintHelpers": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+      "multiTroveGetter": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c"
     },
     "wstETH": {
       "native": false,
@@ -36,22 +38,22 @@
       "ccr": 1.5,
       "softFloor": 1.05,
       "collToken": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-      "priceFeed": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "priceFeed": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
       "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "ethUsdSettable": true,
       "stEthEthAggregator": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "sortedTroves": "0xa82fF9aFd8f496c3d6ac40E2a0F282E47488CFc9",
-      "troveManager": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8",
-      "activePool": "0x851356ae760d987E095750cCeb3bC6014560891C",
-      "stabilityPool": "0xf5059a5D33d5853360D16C683c16e67980206f36",
-      "gasPool": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
-      "defaultPool": "0x998abeb3E57409262aE5b751f60747921B33613E",
-      "collSurplusPool": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
-      "borrowerOperations": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
-      "hintHelpers": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
-      "multiTroveGetter": "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
-      "branchStaking": "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
-      "communityIssuance": "0x9d4454B023096f34B160D6B654540c56A1F81688",
+      "sortedTroves": "0x851356ae760d987E095750cCeb3bC6014560891C",
+      "troveManager": "0xf5059a5D33d5853360D16C683c16e67980206f36",
+      "activePool": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
+      "stabilityPool": "0x998abeb3E57409262aE5b751f60747921B33613E",
+      "gasPool": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
+      "defaultPool": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+      "collSurplusPool": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+      "borrowerOperations": "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
+      "hintHelpers": "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
+      "multiTroveGetter": "0x9d4454B023096f34B160D6B654540c56A1F81688",
+      "branchStaking": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00",
+      "communityIssuance": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
       "faucetAmount": "10"
     },
     "tBILL": {
@@ -61,25 +63,25 @@
       "mcr": 1.05,
       "ccr": 1.15,
       "softFloor": 1.03,
-      "collToken": "0xB0D4afd8879eD9F52b28595d31B441D079B2Ca07",
-      "underlyingToken": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "collToken": "0x922D6956C99E12DFeB3224DEA977D0939758A1Fe",
+      "underlyingToken": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
       "underlyingSymbol": "mTBILL",
       "skimRatePerYear": 0.02,
-      "priceFeed": "0x162A433068F51e18b7d13932F27e66a3f99E6890",
-      "navPriceFeed": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-      "navAggregator": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-      "sortedTroves": "0x922D6956C99E12DFeB3224DEA977D0939758A1Fe",
-      "troveManager": "0x5081a39b8A5f0E35a8D959395a630b68B74Dd30f",
-      "activePool": "0x1fA02b2d6A771842690194Cf62D91bdd92BfE28d",
-      "stabilityPool": "0xdbC43Ba45381e02825b14322cDdd15eC4B3164E6",
-      "gasPool": "0x04C89607413713Ec9775E14b954286519d836FEf",
-      "defaultPool": "0x4C4a2f8c81640e47606d3fd77B353E87Ba015584",
-      "collSurplusPool": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
-      "borrowerOperations": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
-      "hintHelpers": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
-      "multiTroveGetter": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
-      "branchStaking": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
-      "communityIssuance": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
+      "priceFeed": "0x5081a39b8A5f0E35a8D959395a630b68B74Dd30f",
+      "navPriceFeed": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "navAggregator": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      "sortedTroves": "0x1fA02b2d6A771842690194Cf62D91bdd92BfE28d",
+      "troveManager": "0xdbC43Ba45381e02825b14322cDdd15eC4B3164E6",
+      "activePool": "0x04C89607413713Ec9775E14b954286519d836FEf",
+      "stabilityPool": "0x4C4a2f8c81640e47606d3fd77B353E87Ba015584",
+      "gasPool": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
+      "defaultPool": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
+      "collSurplusPool": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
+      "borrowerOperations": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+      "hintHelpers": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+      "multiTroveGetter": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
+      "branchStaking": "0x8198f5d8F8CfFE8f9C413d98a0A55aEB8ab9FbB7",
+      "communityIssuance": "0x0355B7B8cb128fA5692729Ab3AAa199C1753f726",
       "debtCap": "2000000",
       "faucetAmount": "10000"
     },
@@ -90,24 +92,24 @@
       "mcr": 1.1,
       "ccr": 1.5,
       "softFloor": 1.05,
-      "priceFeed": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "priceFeed": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
       "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "ethUsdSettable": true,
-      "sortedTroves": "0x4631BCAbD6dF18D94796344963cB60d44a4136b6",
-      "troveManager": "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D",
-      "activePool": "0xA4899D35897033b927acFCf422bc745916139776",
-      "stabilityPool": "0xf953b3A269d80e3eB0F2947630Da976B896A8C5b",
-      "gasPool": "0xAA292E8611aDF267e563f334Ee42320aC96D0463",
-      "defaultPool": "0x5c74c94173F05dA1720953407cbb920F3DF9f887",
-      "collSurplusPool": "0x720472c8ce72c2A2D711333e064ABD3E6BbEAdd3",
-      "borrowerOperations": "0xe8D2A1E88c91DCd5433208d4152Cc4F399a7e91d",
-      "hintHelpers": "0x5067457698Fd6Fa1C6964e416b3f42713513B3dD",
-      "multiTroveGetter": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629",
-      "communityIssuance": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
-      "interestRouter": "0xCace1b78160AE76398F486c8a18044da0d66d86D",
-      "sorUSDVault": "0xD5ac451B0c50B9476107823Af206eD814a2e2580",
-      "swapPool": "0x5bf5b11053e734690269C6B9D438F8C9d48F528A",
-      "leverZapFactory": "0xffa7CA1AEEEbBc30C874d32C7e22F052BbEa0429"
+      "sortedTroves": "0xA4899D35897033b927acFCf422bc745916139776",
+      "troveManager": "0xf953b3A269d80e3eB0F2947630Da976B896A8C5b",
+      "activePool": "0xAA292E8611aDF267e563f334Ee42320aC96D0463",
+      "stabilityPool": "0x5c74c94173F05dA1720953407cbb920F3DF9f887",
+      "gasPool": "0x720472c8ce72c2A2D711333e064ABD3E6BbEAdd3",
+      "defaultPool": "0xe8D2A1E88c91DCd5433208d4152Cc4F399a7e91d",
+      "collSurplusPool": "0x5067457698Fd6Fa1C6964e416b3f42713513B3dD",
+      "borrowerOperations": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629",
+      "hintHelpers": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
+      "multiTroveGetter": "0xCace1b78160AE76398F486c8a18044da0d66d86D",
+      "communityIssuance": "0xD5ac451B0c50B9476107823Af206eD814a2e2580",
+      "interestRouter": "0xF8e31cb472bc70500f08Cd84917E5A1912Ec8397",
+      "sorUSDVault": "0xc0F115A19107322cFBf1cDBC7ea011C19EbDB4F8",
+      "swapPool": "0x3aAde2dCD2Df6a8cAc689EE797591b2913658659",
+      "leverZapFactory": "0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926"
     }
   },
   "abis": {
@@ -123,6 +125,11 @@
             "internalType": "uint256",
             "name": "_timeout",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_sequencerUptimeFeed",
+            "type": "address"
           }
         ],
         "stateMutability": "nonpayable",
@@ -162,6 +169,19 @@
             "internalType": "string",
             "name": "",
             "type": "string"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "SEQUENCER_GRACE_PERIOD",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
           }
         ],
         "stateMutability": "view",
@@ -247,6 +267,32 @@
       },
       {
         "inputs": [],
+        "name": "sequencerUp",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "sequencerUptimeFeed",
+        "outputs": [
+          {
+            "internalType": "contract AggregatorV3Interface",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "timeout",
         "outputs": [
           {
@@ -279,8 +325,18 @@
           },
           {
             "internalType": "uint256",
-            "name": "_timeout",
+            "name": "_ethUsdTimeout",
             "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_stEthEthTimeout",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_sequencerUptimeFeed",
+            "type": "address"
           }
         ],
         "stateMutability": "nonpayable",
@@ -372,6 +428,19 @@
       },
       {
         "inputs": [],
+        "name": "SEQUENCER_GRACE_PERIOD",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "depegged",
         "outputs": [
           {
@@ -404,6 +473,19 @@
             "internalType": "uint8",
             "name": "",
             "type": "uint8"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "ethUsdTimeout",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
           }
         ],
         "stateMutability": "view",
@@ -481,6 +563,32 @@
       },
       {
         "inputs": [],
+        "name": "sequencerUp",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "sequencerUptimeFeed",
+        "outputs": [
+          {
+            "internalType": "contract AggregatorV3Interface",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "stEthEthAggregator",
         "outputs": [
           {
@@ -507,7 +615,7 @@
       },
       {
         "inputs": [],
-        "name": "timeout",
+        "name": "stEthEthTimeout",
         "outputs": [
           {
             "internalType": "uint256",

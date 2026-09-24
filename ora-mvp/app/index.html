@@ -23,6 +23,7 @@
       <option value="baseSepolia">Base Sepolia</option>
       <option value="base">Base (mainnet)</option>
     </select>
+    <select id="walletSelect" style="display:none" title="choose which installed wallet to connect (EIP-6963)"></select>
     <button id="btnConnect" style="display:none">Connect wallet</button>
     <select id="accountSelect">
       <option value="alice">Alice (demo)</option>
@@ -222,6 +223,13 @@
       <button class="mini" id="btnSetPrice">Set</button>
       <span class="hint" id="simNote" style="display:none">live Chainlink feed — not settable</span>
     </div>
+    <div class="simrow" id="seqRow" style="display:none">
+      <span>L2 sequencer:</span> <b id="simSeq">—</b>
+      <button class="mini" data-seq="halt" title="simulate an OP-stack sequencer outage — oracles freeze to lastGoodPrice">Halt</button>
+      <button class="mini" data-seq="restart" title="sequencer back up — feeds stay untrusted for a 1h grace period">Restart</button>
+      <button class="mini" data-seq="grace" title="age the restart past the 1h grace period">Skip grace</button>
+      <span class="hint">outage ⇒ oracle down, lastGoodPrice served; restarts honor a 1h grace</span>
+    </div>
     <div class="simrow" id="depegRow" style="display:none">
       <span>stETH/ETH rate:</span> <b id="simRate">—</b>
       <button class="mini" data-rate="0.95">Depeg 0.95</button>
@@ -252,6 +260,6 @@
 <footer>ORA Protocol — Liquity-engine core. ETH + wstETH + wmTBILL (RWA yield-share, MCR 105%) + ETH v2 (user-set rates, one-click leverage) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
-<script src="app.js?v=lever1"></script>
+<script src="app.js?v=harden1"></script>
 </body>
 </html>

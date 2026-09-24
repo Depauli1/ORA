@@ -81,6 +81,28 @@ function rebrand(s) {
     .replace(/Liquity/g, "ORA");
 }
 
+/* Pre-flight simulation: every write is eth_call'd first, so a doomed tx is
+ * rejected with the DECODED revert reason before the wallet ever prompts for
+ * a signature (and before any gas is spent). Non-revert simulation hiccups
+ * (RPC blips, missing state) never block sending. */
+function guardSigner(signer, prov) {
+  if (signer.__oraGuarded) return signer;
+  const orig = signer.sendTransaction.bind(signer);
+  signer.sendTransaction = async (txReq) => {
+    try {
+      await prov.call({ ...txReq, from: signer.address });
+    } catch (e) {
+      if (e && (e.code === "CALL_EXCEPTION" || e.data)) {
+        throw new Error("rejected in pre-flight simulation — " + reason(e));
+      }
+      // anything else: let the real send decide
+    }
+    return orig(txReq);
+  };
+  signer.__oraGuarded = true;
+  return signer;
+}
+
 async function tx(label, fn) {
   if (!wallet) return toast("Connect a wallet first");
   if (busy) return;
@@ -113,6 +135,8 @@ function connectContracts() {
     ? new ethers.Contract(B.ethUsdAggregator, A.settableAggregator, runner) : null;
   C.aggRate = B.stEthEthAggregator
     ? new ethers.Contract(B.stEthEthAggregator, A.settableAggregator, runner) : null;
+  C.aggSeq = dep.shared && dep.shared.sequencerSettable && dep.shared.sequencerUptimeFeed !== Z
+    ? new ethers.Contract(dep.shared.sequencerUptimeFeed, A.settableAggregator, runner) : null;
   C.troveManager = new ethers.Contract(
     B.troveManager, B.rates ? A.troveManagerRates
       : B.native ? A.troveManager : (A.troveManagerV2 || A.troveManager), runner);
@@ -148,6 +172,7 @@ function setAccount(name) {
   const w = new ethers.Wallet(ACCOUNTS[name], provider);
   wallet = new ethers.NonceManager(w);
   wallet.address = w.address;
+  guardSigner(wallet, provider);
   connectContracts();
   $("addr").textContent = w.address;
 }
@@ -171,6 +196,7 @@ function setBranch(name) {
     ? "testnet oracle control — crash the market, run liquidations"
     : `troves nearest liquidation — anyone can liquidate below ${(brMcr() * 100).toFixed(0)}%`;
   $("depegRow").style.display = testnet && !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
+  $("seqRow").style.display = testnet && C.aggSeq && !isRWA() ? "flex" : "none";
   $("navRow").style.display = testnet && isRWA() ? "flex" : "none";
   $("priceRow").style.display = !testnet || isRWA() ? "none" : "flex";
   // Rates-engine UI (ETH v2 branch)
@@ -249,18 +275,46 @@ async function setNetwork(mode) {
   }
 }
 
+/* EIP-6963 multi-wallet discovery: every installed browser wallet announces
+ * itself (MetaMask, Rabby, Coinbase Wallet, Trust…); the user picks one.
+ * Falls back to the legacy window.ethereum injection. */
+const discoveredWallets = [];
+window.addEventListener("eip6963:announceProvider", (e) => {
+  try {
+    if (!e.detail || !e.detail.info) return;
+    if (discoveredWallets.some(w => w.info.uuid === e.detail.info.uuid)) return;
+    discoveredWallets.push(e.detail);
+    const sel = $("walletSelect");
+    if (!sel) return;
+    sel.innerHTML = discoveredWallets
+      .map((w, i) => `<option value="${i}">${w.info.name}</option>`).join("");
+    sel.style.display = discoveredWallets.length > 1 && $("btnConnect").style.display !== "none"
+      ? "inline-block" : "none";
+  } catch {}
+});
+try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch {}
+
+function pickedEip1193() {
+  if (discoveredWallets.length > 0) {
+    const i = parseInt($("walletSelect").value || "0", 10) || 0;
+    return (discoveredWallets[i] || discoveredWallets[0]).provider;
+  }
+  return window.ethereum || null;
+}
+
 async function connectWallet() {
   const net = curNet();
-  if (!window.ethereum) return toast(`No wallet extension found — install MetaMask (or a compatible wallet) to use ${net.label}.`, 8000);
+  const injected = pickedEip1193();
+  if (!injected) return toast(`No wallet extension found — install MetaMask (or a compatible wallet) to use ${net.label}.`, 8000);
   try {
     try {
-      await window.ethereum.request({
+      await injected.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: net.chainIdHex }]
       });
     } catch (err) {
       if (err.code === 4902) {
-        await window.ethereum.request({
+        await injected.request({
           method: "wallet_addEthereumChain",
           params: [{
             chainId: net.chainIdHex,
@@ -272,10 +326,11 @@ async function connectWallet() {
         });
       } else { throw err; }
     }
-    const bp = new ethers.BrowserProvider(window.ethereum);
+    const bp = new ethers.BrowserProvider(injected);
     await bp.send("eth_requestAccounts", []);
     const signer = await bp.getSigner();
     signer.address = await signer.getAddress();
+    guardSigner(signer, bp);
     provider = bp;
     wallet = signer;
     connectContracts();
@@ -391,6 +446,16 @@ async function refresh() {
     $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
 
     if (C.aggRate) $("simRate").textContent = Number(ethers.formatEther(stRate[0])).toFixed(3);
+    if (C.aggSeq && !isRWA()) {
+      try {
+        const [up, rd] = await Promise.all([C.priceFeed.sequencerUp(), C.aggSeq.latestRoundData()]);
+        const halted = rd[1] !== 0n;
+        $("simSeq").textContent = up ? "UP" : halted ? "DOWN" : "GRACE (1h)";
+        $("simSeq").className = up ? "good" : "bad";
+        if (!up) toast((halted ? "L2 sequencer DOWN" : "sequencer restart grace period") +
+          " — oracles are serving lastGoodPrice", 6000);
+      } catch {}
+    }
     if (C.aggNav) {
       const nav = await C.aggNav.latestRoundData();
       $("simNav").textContent = "$" + (Number(nav[1]) / 1e8).toFixed(4);
@@ -800,6 +865,21 @@ async function main() {
         }
         await (await C.aggNav.setAnswer(target)).wait();
         return C.priceFeed.fetchPrice(); // apply clamp / shock breaker on-chain
+      });
+    }));
+
+  // Sequencer outage simulator (local mock uptime feed)
+  document.querySelectorAll("button[data-seq]").forEach(b =>
+    b.addEventListener("click", () => {
+      if (!C.aggSeq) return;
+      const mode = b.dataset.seq;
+      const label = mode === "halt" ? "Halt L2 sequencer"
+        : mode === "restart" ? "Restart sequencer (grace starts)" : "Skip the 1h restart grace";
+      tx(label, async () => {
+        if (mode === "halt") { await (await C.aggSeq.setAnswer(1n)).wait(); }
+        else if (mode === "restart") { await (await C.aggSeq.setAnswer(0n)).wait(); }
+        else { await (await C.aggSeq.makeStale(2 * 3600)).wait(); }
+        return C.priceFeed.fetchPrice(); // apply the guard on-chain
       });
     }));
 

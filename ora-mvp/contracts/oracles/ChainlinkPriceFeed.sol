@@ -6,6 +6,7 @@ import "../Interfaces/IPriceFeed.sol";
 import "../Dependencies/AggregatorV3Interface.sol";
 import "../Dependencies/CheckContract.sol";
 import "./ChainlinkFeedReader.sol";
+import "./SequencerGuard.sol";
 
 /*
  * ORA Phase 1.5 — Chainlink adapter for native-collateral branches (ETH/USD).
@@ -15,8 +16,13 @@ import "./ChainlinkFeedReader.sol";
  * and falls back to lastGoodPrice (same fallback philosophy as upstream
  * Liquity's PriceFeed, single-oracle variant — a secondary oracle can be
  * added per branch later).
+ *
+ * L2 hardening: when a sequencer uptime feed is configured (Base/OP-stack
+ * deployments), a sequencer outage — or the 1h grace period after a restart —
+ * is treated exactly like a broken feed: oracle flagged down, lastGoodPrice
+ * served. Pass address(0) on L1s and local chains.
  */
-contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
+contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, IPriceFeed {
 
     string constant public NAME = "ChainlinkPriceFeed";
 
@@ -29,8 +35,12 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
 
     event OracleStatusChanged(bool _live);
 
-    constructor(address _aggregator, uint _timeout) public {
+    constructor(address _aggregator, uint _timeout, address _sequencerUptimeFeed)
+        public
+        SequencerGuard(_sequencerUptimeFeed)
+    {
         checkContract(_aggregator);
+        if (_sequencerUptimeFeed != address(0)) { checkContract(_sequencerUptimeFeed); }
         require(_timeout > 0, "ChainlinkPriceFeed: zero timeout");
 
         AggregatorV3Interface agg = AggregatorV3Interface(_aggregator);
@@ -42,17 +52,23 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
 
         (uint price, bool ok) = _readFeed(agg, dec, _timeout);
         require(ok, "ChainlinkPriceFeed: initial feed response invalid");
+        require(_sequencerUpAt(_sequencerUptimeFeed), "ChainlinkPriceFeed: sequencer down at deploy");
         lastGoodPrice = price;
         oracleLive = true;
     }
 
     // View variant for frontends: current price if healthy, else lastGoodPrice.
     function getPrice() external view returns (uint) {
+        if (!_sequencerUp()) { return lastGoodPrice; }
         (uint price, bool ok) = _readFeed(aggregator, feedDecimals, timeout);
         return ok ? price : lastGoodPrice;
     }
 
     function fetchPrice() external override returns (uint) {
+        if (!_sequencerUp()) {
+            if (oracleLive) { oracleLive = false; emit OracleStatusChanged(false); }
+            return lastGoodPrice;
+        }
         (uint price, bool ok) = _readFeed(aggregator, feedDecimals, timeout);
         if (ok) {
             lastGoodPrice = price;
