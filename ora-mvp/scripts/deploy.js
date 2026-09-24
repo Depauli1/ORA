@@ -248,6 +248,17 @@ async function main() {
   await (await branchIssuance3.activate()).wait();
   console.log(`  branch 3 wired — debt cap ${RWA_DEBT_CAP} orUSD, ${RWA_ORA_ALLOCATION} ORA issuance live`);
 
+  // ---------------- Governance: freeze the branch set ----------------
+  // The branch registrar is the ONE live admin power (it can add new
+  // orUSD-minting branches). Keep it during development; renounce it on
+  // production deploys so the core is fully immutable.
+  if (process.env.ORA_RENOUNCE_REGISTRAR === "1") {
+    await (await orUSD.renounceBranchRegistrar()).wait();
+    console.log("\n  branch registrar RENOUNCED — the orUSD branch set is now immutable");
+  } else {
+    console.log("\n  branch registrar kept live (dev mode) — set ORA_RENOUNCE_REGISTRAR=1 to freeze the branch set");
+  }
+
   // ---------------- Export ----------------
   const abi = name => {
     const hits = [

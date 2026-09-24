@@ -33,3 +33,5 @@ ngrok.config.yml
 !/.yarn/releases
 !/.yarn/sdks
 !/.yarn/versions
+# ora-mvp uses npm — keep its lockfile so solc stays pinned at 0.6.11
+!/ora-mvp/package-lock.json

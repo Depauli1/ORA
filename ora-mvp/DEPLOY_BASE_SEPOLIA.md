@@ -35,6 +35,12 @@ Already generated in this workspace: `0xe169b120023A9a8AeF04197E9c624bE6EBC59268
 npx hardhat run scripts/deploy-public.js --network baseSepolia
 ```
 
+For a production-grade deployment add `ORA_RENOUNCE_REGISTRAR=1` to freeze the
+orUSD branch set (renounces the one remaining admin power — no new collateral
+branches can ever be added to that deployment). Leave it off while iterating.
+Afterwards, `node scripts/verify-tokenomics.js` audits the deployment against
+every tokenomics claim (supply, fee routing, issuance caps, renounced ownership).
+
 This deploys and wires, in one run:
 - **ETH branch** — full native-ETH core (TroveManager, pools, BorrowerOperations)
 - **wstETH branch** — ERC20 pool suite + MockWstETH (public faucet, 1000/call)

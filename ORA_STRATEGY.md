@@ -51,8 +51,14 @@
 - **orUSD** — the stablecoin. Mint by borrowing against collateral (min 110% ICR). Hard peg: $1 redemption floor + minting ceiling arbitrage.
 - **ORA** (100M fixed supply) — captures protocol revenue:
   - Stake ORA → earn 100% of borrowing + redemption fees (real yield, in ETH/LST + orUSD).
-  - Community issuance (32%) streams to Stability Pool depositors and agent-network operators.
+  - Community issuance (32%) streams to Stability Pool depositors and agent-network operators
+    (32M to the ETH-branch pool at token creation, plus 1.5M reallocated from treasury to the
+    wstETH/mTBILL branch pools — caps locked at activation).
   - No governance theater at launch: minimal, immutable core; parameters per collateral branch set at branch deployment.
+    All contract ownership renounced during wiring; the one remaining admin power (the orUSD branch registrar)
+    is renounced on production deploys via `ORA_RENOUNCE_REGISTRAR=1`.
+  - Verified on-chain: `node scripts/verify-tokenomics.js` checks every claim above against the
+    deployment (32/32 with the registrar renounced).
 
 ## 4. Why We Can Win
 
