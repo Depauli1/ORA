@@ -51,6 +51,14 @@ module.exports = {
         settings: {
           optimizer: { enabled: true, runs: 1 }
         }
+      },
+      // TroveManagerRates adds the user-set interest-rate engine on top of the
+      // size-capped v1 TroveManager; runs:1 keeps it under the 24KB limit.
+      "contracts/rates/TroveManagerRates.sol": {
+        version: "0.6.11",
+        settings: {
+          optimizer: { enabled: true, runs: 1 }
+        }
       }
     }
   },

@@ -49,6 +49,7 @@ const isNative = () => dep.branches[branch].native;
 const collSym = () => dep.branches[branch].collSymbol;
 const bcfg = () => dep.branches[branch];
 const isRWA = () => !!dep.branches[branch].rwa;
+const isRates = () => !!dep.branches[branch].rates;
 const faucetAmt = () => bcfg().faucetAmount || "10";
 const myAddr = () => wallet ? wallet.address : Z;
 
@@ -109,14 +110,20 @@ function connectContracts() {
   C.aggRate = B.stEthEthAggregator
     ? new ethers.Contract(B.stEthEthAggregator, A.settableAggregator, runner) : null;
   C.troveManager = new ethers.Contract(
-    B.troveManager, B.native ? A.troveManager : (A.troveManagerV2 || A.troveManager), runner);
+    B.troveManager, B.rates ? A.troveManagerRates
+      : B.native ? A.troveManager : (A.troveManagerV2 || A.troveManager), runner);
   C.borrowerOps = new ethers.Contract(
-    B.borrowerOperations, B.native ? A.borrowerOperations : A.borrowerOperationsERC20, runner);
+    B.borrowerOperations, B.rates ? A.borrowerOperationsRates
+      : B.native ? A.borrowerOperations : A.borrowerOperationsERC20, runner);
   C.stabilityPool = new ethers.Contract(
-    B.stabilityPool, B.native ? A.stabilityPool : A.stabilityPoolERC20, runner);
+    B.stabilityPool, B.rates ? A.stabilityPoolRates
+      : B.native ? A.stabilityPool : A.stabilityPoolERC20, runner);
   C.multiGetter = new ethers.Contract(B.multiTroveGetter, A.multiTroveGetter, runner);
   C.sortedTroves = new ethers.Contract(B.sortedTroves, A.sortedTroves, runner);
-  C.hintHelpers = new ethers.Contract(B.hintHelpers, A.hintHelpers, runner);
+  C.hintHelpers = new ethers.Contract(B.hintHelpers, B.rates ? A.hintHelpersRates : A.hintHelpers, runner);
+  // Rates engine extras (ETH v2 branch)
+  C.vault = B.sorUSDVault ? new ethers.Contract(B.sorUSDVault, A.sorUSDVault, runner) : null;
+  C.router = B.interestRouter ? new ethers.Contract(B.interestRouter, A.interestRouter, runner) : null;
   C.collToken = B.native ? null
     : new ethers.Contract(B.collToken, B.rwa ? A.mockTBill : A.mockWstETH, runner);
   C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
@@ -158,6 +165,20 @@ function setBranch(name) {
   $("depegRow").style.display = testnet && !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
   $("navRow").style.display = testnet && isRWA() ? "flex" : "none";
   $("priceRow").style.display = !testnet || isRWA() ? "none" : "flex";
+  // Rates-engine UI (ETH v2 branch)
+  const rates = isRates();
+  $("rateField").style.display = rates ? "" : "none";
+  $("rateKv").style.display = rates ? "" : "none";
+  $("rateAdjustRow").style.display = rates ? "" : "none";
+  $("btnRate").style.display = rates ? "inline-block" : "none";
+  $("sorusdCard").style.display = rates ? "" : "none";
+  $("troveHint").innerHTML = rates
+    ? 'borrow orUSD against <b class="collsym">ETH</b> · pay the rate <b>you</b> choose'
+    : 'borrow orUSD against <b class="collsym">' + collSym() + '</b> · 0% interest';
+  $("redeemHint").textContent = rates
+    ? "Rate-ordered: redeems against the LOWEST-interest-rate troves first — paying a higher rate is redemption protection. Fee: 0.5% floor + rate. Disabled during the 14-day bootstrap period."
+    : "Redeems against the lowest-collateral troves at face value, minus the redemption fee (0.5% floor + rate). Disabled during the 14-day bootstrap period after launch.";
+  $("stFeeLabel").textContent = rates ? "Avg Borrow Rate" : "Borrow Fee";
   // sensible open-trove defaults per collateral
   const defs = isRWA() ? ["10000", "5000"] : isNative() ? ["5", "4000"] : ["6", "6000"];
   $("openColl").value = defs[0];
@@ -279,8 +300,26 @@ async function getInsertHints(newColl, newDebt) {
   }
 }
 
+// Rates branch: the sorted list is keyed by annual interest rate.
+async function rateInsertHints(rateWei) {
+  try {
+    const size = await C.sortedTroves.getSize();
+    if (size <= 1n) return [Z, Z];
+    const trials = BigInt(Math.min(15 * Math.ceil(Math.sqrt(Number(size))), 3000));
+    const [approx] = await C.hintHelpers.getApproxHint(rateWei, trials, 42n);
+    const pos = await C.sortedTroves.findInsertPosition(rateWei, approx, approx);
+    return [pos[0], pos[1]];
+  } catch (e) {
+    console.warn("rate hint computation failed, falling back to zero hints", e);
+    return [Z, Z];
+  }
+}
+
 // Hints for adjusting the caller's existing trove by (dColl, dDebt) deltas.
 async function adjustHints(dColl, dDebt) {
+  // Rates branch: adjustments don't change the rate, so the trove never moves
+  // in the list — no hints needed at all.
+  if (isRates()) return [Z, Z];
   const e = await C.troveManager.getEntireDebtAndColl(myAddr());
   return getInsertHints(e[1] + dColl, e[0] + dDebt);
 }
@@ -394,6 +433,26 @@ async function refresh() {
     $("stkEth").textContent = fmt(stkEth, 5) + " " + (C.branchStakingMode ? collSym() : "ETH");
     $("stkOrusd").textContent = fmt(stkOrusd, 3) + " orUSD";
 
+    if (isRates()) {
+      const [myRate, aggW, sysDebt, svP, svTvl, svShares, pend] = await Promise.all([
+        C.troveManager.troveAnnualRate(me),
+        C.troveManager.aggWeightedDebt(),
+        C.troveManager.getEntireSystemDebt(),
+        C.vault.sharePrice(),
+        C.vault.totalAssets(),
+        C.vault.balanceOf(me),
+        C.router.pending()
+      ]);
+      $("tvRate").textContent = (Number(myRate) / 1e16).toFixed(2) + "% /yr";
+      $("svPrice").textContent = Number(ethers.formatEther(svP)).toFixed(6) + " orUSD";
+      $("svTvl").textContent = fmt(svTvl, 0) + " orUSD";
+      $("svBal").textContent = fmt(svShares) + " (" + fmt(svShares * svP / 10n ** 18n) + " orUSD)";
+      // interest stream/yr × savers' 80% share ÷ vault TVL
+      $("svApy").textContent = (svTvl > 0n ? Number(aggW) * 0.8 / Number(svTvl) * 100 : 0).toFixed(2) + "%";
+      $("svPending").textContent = fmt(pend);
+      $("stFee").textContent = (sysDebt > 0n ? Number(aggW) / Number(sysDebt) * 100 : 0).toFixed(2) + "%";
+    }
+
     await refreshTrovesTable();
   } catch (e) {
     console.error(e);
@@ -407,8 +466,11 @@ function updateOpenPreview(rate) {
   const totalDebt = borrow + fee + 200;
   const icr = totalDebt > 0 ? (coll * price / totalDebt) * 100 : 0;
   const cls = icr < 120 ? "bad" : icr < 150 ? "warn" : "good";
+  const ratePct = parseFloat($("openRate").value) || 0;
   $("openPreview").innerHTML =
-    `Fee: <b>${fee.toFixed(2)} orUSD</b> · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>` +
+    (isRates()
+      ? `Interest: <b>≈${(totalDebt * ratePct / 100).toFixed(0)} orUSD/yr</b> at ${ratePct}%/yr (no upfront fee) · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`
+      : `Fee: <b>${fee.toFixed(2)} orUSD</b> · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`) +
     `Collateral ratio: <b class="${cls}">${icr.toFixed(1)}%</b> — liquidation below 110%` +
     (borrow < 1800 ? ' · <span class="bad">minimum borrow is 1,800 orUSD</span>' : "") +
     (bcfg().debtCap ? ` · isolated branch: debt cap ${Number(bcfg().debtCap).toLocaleString("en-US")} orUSD` : "");
@@ -419,7 +481,12 @@ async function refreshTrovesTable() {
   $("btnMoreTroves").style.display = rows.length >= troveRows ? "inline-block" : "none";
   const tbody = $("trovesTable").querySelector("tbody");
   tbody.innerHTML = "";
+  const rowRates = isRates()
+    ? await Promise.all(rows.map(r => C.troveManager.troveAnnualRate(r[0]).catch(() => 0n)))
+    : null;
+  let ri = -1;
   for (const r of rows) {
+    ri++;
     const owner = r[0], debt = r[1], coll = r[2];
     const icr = Number(coll) * price / Number(debt) * 100;
     const liq = icr < MCR * 100;
@@ -429,7 +496,8 @@ async function refreshTrovesTable() {
     const tr = document.createElement("tr");
     if (liq) tr.className = "liq";
     tr.innerHTML =
-      `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}</td>` +
+      `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}` +
+      (rowRates ? ` <span class="hint">@ ${(Number(rowRates[ri]) / 1e16).toFixed(1)}%</span>` : "") + `</td>` +
       `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
       `<td class="${liq ? "bad" : icr < 150 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
       `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button>` +
@@ -457,7 +525,7 @@ async function main() {
   document.querySelectorAll(".tab").forEach(t =>
     t.addEventListener("click", () => { troveRows = 50; setBranch(t.dataset.branch); refresh(); }));
   $("btnMoreTroves").addEventListener("click", () => { troveRows += 50; refreshTrovesTable(); });
-  ["openColl", "openDebt"].forEach(id => $(id).addEventListener("input", () => updateOpenPreview()));
+  ["openColl", "openDebt", "openRate"].forEach(id => $(id).addEventListener("input", () => updateOpenPreview()));
 
   $("btnWstFaucet").addEventListener("click", () =>
     tx(collSym() + " faucet", () => C.collToken.faucet(ethers.parseEther(faucetAmt()))));
@@ -466,7 +534,15 @@ async function main() {
     const coll = ethers.parseEther($("openColl").value || "0");
     const debt = ethers.parseEther($("openDebt").value || "0");
     if (!wallet) return toast("Connect a wallet first");
-    if (isNative()) {
+    if (isRates()) {
+      const pct = parseFloat($("openRate").value || "0");
+      if (!(pct >= 0.5 && pct <= 100)) return toast("Interest rate must be between 0.5 and 100 %/yr");
+      const rateWei = ethers.parseEther((pct / 100).toFixed(18));
+      tx("Open Trove @ " + pct + "%", async () => {
+        const [up, low] = await rateInsertHints(rateWei);
+        return C.borrowerOps.openTroveWithRate(debt, rateWei, up, low, { value: coll });
+      });
+    } else if (isNative()) {
       tx("Open Trove", async () => {
         const [up, low] = await getInsertHints(coll, (await borrowWithFee(debt)) + GAS_COMP);
         return C.borrowerOps.openTrove(MAX_FEE, debt, up, low, { value: coll });
@@ -531,11 +607,28 @@ async function main() {
     tx("Close Trove", () => C.borrowerOps.closeTrove());
   });
 
+  // Rates branch: change your interest rate (7-day cooldown on-chain)
+  $("btnRate").addEventListener("click", () => {
+    if (!wallet) return toast("Connect a wallet first");
+    const pct = parseFloat($("newRate").value || "0");
+    if (!(pct >= 0.5 && pct <= 100)) return toast("Interest rate must be between 0.5 and 100 %/yr");
+    const rateWei = ethers.parseEther((pct / 100).toFixed(18));
+    tx("Change rate to " + pct + "%", async () => {
+      const [up, low] = await rateInsertHints(rateWei);
+      return C.borrowerOps.adjustTroveRate(rateWei, up, low);
+    });
+  });
+
   // Redemption: the $1 hard-peg floor. Burns orUSD against the riskiest
   // troves at face value (minus the redemption fee). Full hint pipeline.
   $("btnRedeem").addEventListener("click", () => {
     const amt = ethers.parseEther($("redeemAmount").value || "0");
     if (amt === 0n) return toast("Enter an orUSD amount to redeem");
+    if (isRates()) {
+      // Rate-ordered redemption: no reinsertion ever happens, so no hints needed.
+      return tx("Redeem orUSD", () =>
+        C.troveManager.redeemCollateral(amt, Z, Z, Z, 0, 0, MAX_FEE));
+    }
     tx("Redeem orUSD", async () => {
       const p = await C.priceFeed.getPrice();
       const [first, partialNICR, truncated] = await C.hintHelpers.getRedemptionHints(amt, p, 0);
@@ -557,6 +650,37 @@ async function main() {
     tx("Stability deposit", () => C.stabilityPool.provideToSP(spAmt(), Z)));
   $("btnSpWithdraw").addEventListener("click", () =>
     tx("Stability withdrawal", () => C.stabilityPool.withdrawFromSP(spAmt())));
+
+  // sorUSD savings vault (rates branch)
+  const svAmt = () => ethers.parseEther($("svAmount").value || "0");
+  $("btnSvDeposit").addEventListener("click", async () => {
+    if (!wallet) return toast("Connect a wallet first");
+    tx("sorUSD deposit", async () => {
+      const need = svAmt();
+      const allowance = await C.orUSD.allowance(myAddr(), bcfg().sorUSDVault);
+      if (allowance < need) {
+        toast("Approving orUSD…", 30000);
+        await (await C.orUSD.approve(bcfg().sorUSDVault, ethers.MaxUint256)).wait();
+      }
+      return C.vault.deposit(need);
+    });
+  });
+  $("btnSvWithdraw").addEventListener("click", () => {
+    if (!wallet) return toast("Connect a wallet first");
+    tx("sorUSD withdraw", async () => {
+      const sh = await C.vault.balanceOf(myAddr());
+      if (sh === 0n) throw new Error("no sorUSD shares to withdraw");
+      return C.vault.redeem(sh);
+    });
+  });
+  $("btnSvRoute").addEventListener("click", () => {
+    if (!wallet) return toast("Connect a wallet first");
+    tx("Route interest", async () => {
+      const p = await C.router.pending();
+      if (p === 0n) throw new Error("nothing pending — interest lands in the router whenever a trove is touched (or poke accrueTroveInterest)");
+      return C.router.distribute();
+    });
+  });
 
   const stkAmt = () => ethers.parseEther($("stkInput").value || "0");
   $("btnStake").addEventListener("click", () =>

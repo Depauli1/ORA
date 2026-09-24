@@ -31,6 +31,9 @@
 
 ### Phase 2 — Better Mechanics (the moat)
 - **Soft liquidation buffer**: partial liquidations below MCR before full liquidation (kinder than v1's all-or-nothing, simpler than LLAMMA).
+- **User-set interest rates + sorUSD** (SHIPPED as the ETH v2 branch): Liquity-v2-style
+  rate-ordered redemptions and a savings vault fed by borrower interest — the protocol's
+  own economic engine.
 - **Dynamic redemption fee decay** tuned for L2 block times.
 - **ORA staking = real yield**: 100% of borrow + redemption fees to stakers (no emissions dependence).
 - KPI: lower liquidation losses per $ of TVL than Liquity v2 over a 30-day volatile window.
@@ -52,13 +55,16 @@
 - **ORA** (100M fixed supply) — captures protocol revenue:
   - Stake ORA → earn 100% of borrowing + redemption fees (real yield, in ETH/LST + orUSD).
   - Community issuance (32%) streams to Stability Pool depositors and agent-network operators
-    (32M to the ETH-branch pool at token creation, plus 1.5M reallocated from treasury to the
-    wstETH/mTBILL branch pools — caps locked at activation).
+    (32M to the ETH-branch pool at token creation, plus 2M reallocated from treasury to the
+    wstETH/mTBILL/ETH-v2 branch pools — caps locked at activation; 34M streamed in total).
+  - **Interest economics (rates engine)**: borrowers on rates branches pay a self-chosen
+    annual rate, minted continuously as orUSD — 80% to sorUSD savers, 20% to the treasury.
+    This is protocol revenue that never depends on emissions.
   - No governance theater at launch: minimal, immutable core; parameters per collateral branch set at branch deployment.
     All contract ownership renounced during wiring; the one remaining admin power (the orUSD branch registrar)
     is renounced on production deploys via `ORA_RENOUNCE_REGISTRAR=1`.
-  - Verified on-chain: `node scripts/verify-tokenomics.js` checks every claim above against the
-    deployment (32/32 with the registrar renounced).
+  - Verified on-chain: `npx hardhat run scripts/verify-tokenomics.js` checks every claim above
+    against the deployment (47/47 with the registrar renounced).
 
 ## 4. Why We Can Win
 
@@ -108,6 +114,20 @@
       `BorrowerOperationsERC20.setDebtCap`, checked on every mint); Phase 2
       stack reused (TroveManagerV2 soft-liqs, BranchStaking, 500k ORA
       issuance); ≥3 collateral branches KPI now live on testnet
+- [x] **Rates engine (ETH v2 branch)** — Liquity-v2-style user-set interest rates
+      as a fourth branch on the same orUSD: borrowers choose 0.5–100%/yr
+      (`TroveManagerRates`), the sorted list is keyed by rate
+      (`SortedTrovesRates`), and **redemptions hit the cheapest borrowers
+      first** — paying more is redemption protection; partial redemptions never
+      reorder the list (no hints needed). Interest accrues lazily per trove,
+      is minted to an `InterestRouter` and split 80/20 between the **sorUSD
+      savings vault** (ERC-4626-style, dead-shares protected) and the treasury.
+      No origination fee (continuous interest replaces it); 7-day rate-adjust
+      cooldown blocks redemption-dodging; ETH-v2 SP gets 500k ORA issuance.
+      Verified on-chain: accrual math (~150k @3.5% × 30d = 432 orUSD), 80/20
+      routing, share-price appreciation, rate-ordered redemption picking the
+      0.6%-rate trove over a lower-ICR 9% trove, system-debt invariant to
+      sub-dust precision, normal-mode liquidation incl. accrued interest
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 

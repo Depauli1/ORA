@@ -25,6 +25,9 @@ const RWA_DEBT_CAP = "2000000";                       // orUSD debt ceiling (str
 const RWA_ORA_ALLOCATION = "500000";                  // ORA for the RWA Stability Pool
 const WST_ORA_ALLOCATION = "1000000";                 // ORA for the wstETH Stability Pool
 
+// Rates engine — ETH v2 branch parameters
+const ETH2_ORA_ALLOCATION = "500000";                 // ORA for the ETH v2 Stability Pool
+
 async function main() {
   const [deployer, , , , treasury] = await ethers.getSigners();
   console.log(`Network: ${network.name} | Deployer: ${deployer.address}`);
@@ -248,6 +251,61 @@ async function main() {
   await (await branchIssuance3.activate()).wait();
   console.log(`  branch 3 wired — debt cap ${RWA_DEBT_CAP} orUSD, ${RWA_ORA_ALLOCATION} ORA issuance live`);
 
+  // ---------------- Branch 4: ETH v2 — user-set interest rates ----------------
+  // Liquity-v2-style engine: borrowers pick an annual rate, the sorted list is
+  // keyed by rate, redemptions hit the cheapest borrowers first, and accrued
+  // interest is minted to the InterestRouter (80% sorUSD savers / 20% treasury).
+  console.log("\n— Branch 4: ETH v2 (user-set interest rates) —");
+  const sortedTroves4 = await deploy("SortedTrovesRates");
+  const troveManager4 = await deploy("TroveManagerRates");
+  const activePool4 = await deploy("ActivePool");
+  const stabilityPool4 = await deploy("StabilityPoolRates");
+  const gasPool4 = await deploy("GasPool");
+  const defaultPool4 = await deploy("DefaultPool");
+  const collSurplusPool4 = await deploy("CollSurplusPool");
+  const borrowerOperations4 = await deploy("BorrowerOperationsRates");
+  const hintHelpers4 = await deploy("HintHelpersRates", await a(troveManager4));
+  const multiTroveGetter4 = await deploy("MultiTroveGetter", await a(troveManager4), await a(sortedTroves4));
+  const branchIssuance4 = await deploy("BranchCommunityIssuance");
+  const interestRouter = await deploy("InterestRouter");
+  const sorUSDVault = await deploy("SorUSDVault", await a(orUSD));
+
+  console.log("\n— Wiring branch 4 (ETH v2 rates) —");
+  await (await orUSD.registerBranch(
+    await a(troveManager4), await a(stabilityPool4), await a(borrowerOperations4))).wait();
+
+  await (await sortedTroves4.setParams(maxBytes32, await a(troveManager4), await a(borrowerOperations4))).wait();
+
+  // setRatesAddresses must precede setAddresses (which renounces ownership)
+  await (await troveManager4.setRatesAddresses(await a(interestRouter), treasury.address)).wait();
+  await (await troveManager4.setAddresses(
+    await a(borrowerOperations4), await a(activePool4), await a(defaultPool4),
+    await a(stabilityPool4), await a(gasPool4), await a(collSurplusPool4),
+    await a(priceFeed), await a(orUSD), await a(sortedTroves4),
+    await a(oraToken), await a(oraStaking))).wait();
+  await (await borrowerOperations4.setAddresses(
+    await a(troveManager4), await a(activePool4), await a(defaultPool4),
+    await a(stabilityPool4), await a(gasPool4), await a(collSurplusPool4),
+    await a(priceFeed), await a(sortedTroves4), await a(orUSD), await a(oraStaking))).wait();
+  await (await stabilityPool4.setAddresses(
+    await a(borrowerOperations4), await a(troveManager4), await a(activePool4),
+    await a(orUSD), await a(sortedTroves4), await a(priceFeed), await a(branchIssuance4))).wait();
+  await (await activePool4.setAddresses(
+    await a(borrowerOperations4), await a(troveManager4), await a(stabilityPool4), await a(defaultPool4))).wait();
+  await (await defaultPool4.setAddresses(await a(troveManager4), await a(activePool4))).wait();
+  await (await collSurplusPool4.setAddresses(
+    await a(borrowerOperations4), await a(troveManager4), await a(activePool4))).wait();
+
+  // Interest routing: 80% to sorUSD savers, 20% to treasury (one-shot wiring)
+  await (await interestRouter.setAddresses(await a(orUSD), await a(sorUSDVault), treasury.address)).wait();
+
+  // ORA rewards for the ETH v2 Stability Pool
+  await (await branchIssuance4.setAddresses(await a(oraToken), await a(stabilityPool4))).wait();
+  await (await oraToken.connect(treasury).transfer(
+    await a(branchIssuance4), ethers.parseEther(ETH2_ORA_ALLOCATION))).wait();
+  await (await branchIssuance4.activate()).wait();
+  console.log("  branch 4 wired — rates engine + sorUSD vault + 500k ORA issuance live");
+
   // ---------------- Governance: freeze the branch set ----------------
   // The branch registrar is the ONE live admin power (it can add new
   // orUSD-minting branches). Keep it during development; renounce it on
@@ -266,7 +324,8 @@ async function main() {
       `contracts/LQTY/${name}.sol/${name}.json`,
       `contracts/TestContracts/${name}.sol/${name}.json`,
       `contracts/branches/${name}.sol/${name}.json`,
-      `contracts/oracles/${name}.sol/${name}.json`
+      `contracts/oracles/${name}.sol/${name}.json`,
+      `contracts/rates/${name}.sol/${name}.json`
     ];
     for (const h of hits) {
       const p = path.join(__dirname, "..", "artifacts", h);
@@ -347,6 +406,28 @@ async function main() {
         debtCap: RWA_DEBT_CAP,
         faucetAmount: "10000"
       }
+      ,
+      ETHv2: {
+        native: true,
+        rates: true,
+        collSymbol: "ETH",
+        priceFeed: await a(priceFeed),
+        ethUsdAggregator: ethUsdAggregatorAddr,
+        ethUsdSettable,
+        sortedTroves: await a(sortedTroves4),
+        troveManager: await a(troveManager4),
+        activePool: await a(activePool4),
+        stabilityPool: await a(stabilityPool4),
+        gasPool: await a(gasPool4),
+        defaultPool: await a(defaultPool4),
+        collSurplusPool: await a(collSurplusPool4),
+        borrowerOperations: await a(borrowerOperations4),
+        hintHelpers: await a(hintHelpers4),
+        multiTroveGetter: await a(multiTroveGetter4),
+        communityIssuance: await a(branchIssuance4),
+        interestRouter: await a(interestRouter),
+        sorUSDVault: await a(sorUSDVault)
+      }
     },
     abis: {
       priceFeed: abi("ChainlinkPriceFeed"),
@@ -368,7 +449,13 @@ async function main() {
       priceFeedRWA: abi("RWAPriceFeed"),
       troveManagerV2: abi("TroveManagerV2"),
       branchStaking: abi("BranchStaking"),
-      branchCommunityIssuance: abi("BranchCommunityIssuance")
+      branchCommunityIssuance: abi("BranchCommunityIssuance"),
+      troveManagerRates: abi("TroveManagerRates"),
+      borrowerOperationsRates: abi("BorrowerOperationsRates"),
+      stabilityPoolRates: abi("StabilityPoolRates"),
+      hintHelpersRates: abi("HintHelpersRates"),
+      sorUSDVault: abi("SorUSDVault"),
+      interestRouter: abi("InterestRouter")
     }
   };
 

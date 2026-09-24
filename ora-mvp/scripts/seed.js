@@ -71,6 +71,33 @@ async function main() {
   }
   await (await sp3.connect(signers[12]).provideToSP(E("250000"), Z)).wait();
   console.log("[mTBILL] Stability Pool seeded: 250,000 orUSD");
+
+  // ---- Branch 4: ETH v2 (user-set interest rates) ----
+  const bo4 = await ethers.getContractAt("BorrowerOperationsRates", dep.branches.ETHv2.borrowerOperations);
+  const sp4 = await ethers.getContractAt("StabilityPoolRates", dep.branches.ETHv2.stabilityPool);
+  const orUSD = await ethers.getContractAt("LUSDToken", dep.shared.orUSDToken);
+  const vault = await ethers.getContractAt("SorUSDVault", dep.branches.ETHv2.sorUSDVault);
+
+  // rate = annual interest, 1e18-scaled. The 0.6%-rate trove is the redemption
+  // bait: healthy ICR but the cheapest rate, so redemptions hit it FIRST —
+  // demonstrating rate-ordered (not ICR-ordered) redemptions.
+  const v2Troves = [
+    { s: 15, coll: "200", debt: "150000", rate: "0.035" }, // whale, ~267%, 3.5%
+    { s: 16, coll: "15",  debt: "18000",  rate: "0.06"  }, // ~165%, 6%
+    { s: 17, coll: "12",  debt: "14000",  rate: "0.006" }, // ~169%, 0.6% — redemption bait
+    { s: 18, coll: "4",   debt: "5800",   rate: "0.09"  }  // ~133%, 9%
+  ];
+  for (const t of v2Troves) {
+    await (await bo4.connect(signers[t.s]).openTroveWithRate(E(t.debt), E(t.rate), Z, Z, { value: E(t.coll) })).wait();
+    console.log(`[ETHv2] trove: ${t.coll} ETH / ${t.debt} orUSD @ ${Number(t.rate) * 100}% (${signers[t.s].address.slice(0, 8)})`);
+  }
+  await (await sp4.connect(signers[15]).provideToSP(E("60000"), Z)).wait();
+  console.log("[ETHv2] Stability Pool seeded: 60,000 orUSD");
+
+  // Seed the sorUSD savings vault (also locks the dead shares)
+  await (await orUSD.connect(signers[15]).approve(dep.branches.ETHv2.sorUSDVault, ethers.MaxUint256)).wait();
+  await (await vault.connect(signers[15]).deposit(E("25000"))).wait();
+  console.log("[ETHv2] sorUSD vault seeded: 25,000 orUSD");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

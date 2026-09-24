@@ -51,6 +51,19 @@ async function main() {
   // ---- Claim 4: stake ORA -> 100% of borrow + redemption fees ----
   console.log("\nClaim: staking earns 100% of borrowing + redemption fees (per branch)");
   for (const [name, B] of Object.entries(dep.branches)) {
+    if (B.rates) {
+      // Rates engine: no borrow fee (continuous interest instead); redemption
+      // ETH fee goes to the protocol treasury, interest to the InterestRouter.
+      const tmR = new ethers.Contract(B.troveManager, A.troveManagerRates, provider);
+      const router = new ethers.Contract(B.interestRouter, A.interestRouter, provider);
+      check(`${name}: no upfront borrow fee (interest replaces it)`,
+        (await tmR.getBorrowingRateWithDecay()) === 0n);
+      check(`${name}: interest mints to the InterestRouter`,
+        (await tmR.interestRouter()).toLowerCase() === B.interestRouter.toLowerCase());
+      check(`${name}: redemption fees route to the treasury`,
+        (await tmR.redemptionFeeReceiver()).toLowerCase() === (await router.treasury()).toLowerCase());
+      continue;
+    }
     const stakingAddr = B.native ? S.oraStaking : B.branchStaking;
     const tm = new ethers.Contract(B.troveManager, A.troveManager, provider);
     const bo = new ethers.Contract(B.borrowerOperations,
@@ -63,6 +76,27 @@ async function main() {
       boTarget.toLowerCase() === stakingAddr.toLowerCase());
   }
 
+  // ---- Claim: rates engine — user-set interest, 80/20 split, bounded rates ----
+  console.log("\nClaim: rates engine — user-set interest streams 80% to sorUSD savers / 20% treasury");
+  for (const [name, B] of Object.entries(dep.branches)) {
+    if (!B.rates) continue;
+    const tmR = new ethers.Contract(B.troveManager, A.troveManagerRates, provider);
+    const router = new ethers.Contract(B.interestRouter, A.interestRouter, provider);
+    const vault = new ethers.Contract(B.sorUSDVault, A.sorUSDVault, provider);
+    check(`${name}: rate bounds 0.5%–100%/yr enforced on-chain`,
+      (await tmR.MIN_ANNUAL_RATE()) === 5n * 10n ** 15n && (await tmR.MAX_ANNUAL_RATE()) === 10n ** 18n);
+    check(`${name}: 7-day rate-adjust cooldown (anti redemption-dodging)`,
+      (await tmR.RATE_ADJUST_COOLDOWN()) === 7n * 86400n);
+    check(`${name}: router split fixed at 80% vault / 20% treasury`,
+      (await router.VAULT_SHARE_BPS()) === 8000n);
+    check(`${name}: router targets the sorUSD vault`,
+      (await router.vault()).toLowerCase() === B.sorUSDVault.toLowerCase());
+    check(`${name}: router wiring is one-shot (owner burned)`,
+      (await router.owner()) === ethers.ZeroAddress);
+    check(`${name}: sorUSD vault holds orUSD as its asset`,
+      (await vault.asset()).toLowerCase() === S.orUSDToken.toLowerCase());
+  }
+
   // ---- Claim 5: community issuance streams to SP depositors ----
   console.log("\nClaim: community issuance (32%) streams to Stability Pool depositors");
   const ci = new ethers.Contract(S.communityIssuance, A.oraToken, provider); // balanceOf only
@@ -70,7 +104,7 @@ async function main() {
   check("ETH-branch CommunityIssuance funded with 32M ORA (32%)",
     ciBal >= 31900000n * E18, M(ciBal).toFixed(2) + "M remaining");
   for (const [name, B] of Object.entries(dep.branches)) {
-    if (B.native) continue;
+    if (!B.communityIssuance) continue;
     const bci = new ethers.Contract(B.communityIssuance, A.branchCommunityIssuance, provider);
     const cap = await bci.supplyCap();
     const active = await bci.active();

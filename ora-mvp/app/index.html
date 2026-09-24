@@ -47,7 +47,7 @@
   <div class="stat"><label>orUSD Supply</label><b id="stSupply">—</b></div>
   <div class="stat"><label>Troves</label><b id="stTroves">—</b></div>
   <div class="stat"><label>Stability Pool</label><b id="stSp">—</b></div>
-  <div class="stat"><label>Borrow Fee</label><b id="stFee">—</b></div>
+  <div class="stat"><label id="stFeeLabel">Borrow Fee</label><b id="stFee">—</b></div>
 </section>
 
 <div class="branchbar">
@@ -55,13 +55,14 @@
   <button class="tab active" id="tabETH" data-branch="ETH">ETH</button>
   <button class="tab" id="tabWstETH" data-branch="wstETH">wstETH</button>
   <button class="tab" id="tabTBILL" data-branch="tBILL">mTBILL <span class="new">RWA</span></button>
+  <button class="tab" id="tabETHv2" data-branch="ETHv2">ETH <span class="new">v2 · rates</span></button>
   <button class="mini" id="btnWstFaucet" style="display:none">Get test collateral</button>
 </div>
 
 <main>
   <!-- TROVE -->
   <div class="card" id="troveCard">
-    <h2>My Trove <span class="hint">borrow orUSD against <b class="collsym">ETH</b> · 0% interest</span></h2>
+    <h2>My Trove <span class="hint" id="troveHint">borrow orUSD against <b class="collsym">ETH</b> · 0% interest</span></h2>
 
     <div id="troveNone">
       <div class="row">
@@ -72,6 +73,10 @@
         <div class="field">
           <label>Borrow (orUSD) <span class="hint">min 1,800</span></label>
           <input id="openDebt" type="number" value="4000" min="1800" step="100" />
+        </div>
+        <div class="field" id="rateField" style="display:none">
+          <label>Interest (%/yr) <span class="hint">your choice</span></label>
+          <input id="openRate" type="number" value="5" min="0.5" max="100" step="0.1" />
         </div>
       </div>
       <div class="preview" id="openPreview">—</div>
@@ -84,6 +89,7 @@
         <div><label>Debt</label><b id="tvDebt">—</b></div>
         <div><label>Collateral Ratio</label><b id="tvIcr">—</b></div>
         <div><label>Liquidation Price</label><b id="tvLiq">—</b></div>
+        <div id="rateKv" style="display:none"><label>My Interest Rate</label><b id="tvRate">—</b></div>
       </div>
       <div class="row">
         <div class="field"><label>Amount</label><input id="adjAmount" type="number" value="1" min="0" step="0.1" /></div>
@@ -94,6 +100,11 @@
         <button id="btnBorrowMore">Borrow orUSD</button>
         <button id="btnRepay">Repay orUSD</button>
       </div>
+      <div class="row" id="rateAdjustRow" style="display:none">
+        <div class="field"><label>New rate (%/yr) <span class="hint">7-day cooldown — higher rate = redemption protection</span></label>
+          <input id="newRate" type="number" value="5" min="0.5" max="100" step="0.1" /></div>
+      </div>
+      <button id="btnRate" style="display:none">Change interest rate</button>
       <button class="danger" id="btnClose">Close Trove (repay all)</button>
       <div class="hint" id="tvCloseHint" style="margin-top:6px"></div>
     </div>
@@ -126,8 +137,29 @@
     <div class="btnrow">
       <button class="primary" id="btnRedeem">Redeem</button>
     </div>
-    <div class="hint" style="margin-top:6px">Redeems against the lowest-collateral troves at face value, minus the
+    <div class="hint" style="margin-top:6px" id="redeemHint">Redeems against the lowest-collateral troves at face value, minus the
       redemption fee (0.5% floor + rate). Disabled during the 14-day bootstrap period after launch.</div>
+  </div>
+
+  <!-- sorUSD SAVINGS (rates branch) -->
+  <div class="card" id="sorusdCard" style="display:none">
+    <h2>sorUSD Savings <span class="hint">deposit orUSD, earn the borrower interest stream</span></h2>
+    <div class="kv">
+      <div><label>Share Price</label><b id="svPrice">—</b></div>
+      <div><label>Vault TVL</label><b id="svTvl">—</b></div>
+      <div><label>My sorUSD</label><b id="svBal">—</b></div>
+      <div><label>Est. APY</label><b id="svApy">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>orUSD amount</label><input id="svAmount" type="number" value="1000" min="0" step="100" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnSvDeposit">Deposit</button>
+      <button id="btnSvWithdraw">Withdraw all</button>
+      <button id="btnSvRoute">Route interest (<span id="svPending">0</span> orUSD pending)</button>
+    </div>
+    <div class="hint" style="margin-top:6px">Borrowers on this branch pay their chosen rate continuously. Anyone can
+      route the accrued stream: 80% to sorUSD savers, 20% to the protocol treasury.</div>
   </div>
 
   <!-- ORA STAKING -->
@@ -191,6 +223,6 @@
 <footer>ORA Protocol — Liquity-engine core. ETH + wstETH + mTBILL (RWA) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
-<script src="app.js?v=mainnet2"></script>
+<script src="app.js?v=rates1"></script>
 </body>
 </html>
