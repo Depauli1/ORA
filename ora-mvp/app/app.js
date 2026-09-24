@@ -1,6 +1,7 @@
-/* ORA Protocol — Phase 1.5 frontend:
- * multi-branch (ETH + wstETH) · Chainlink oracle adapters with depeg CB
- * network switcher: local demo chain / Base Sepolia with MetaMask       */
+/* ORA Protocol frontend:
+ * multi-branch (ETH + wstETH + mTBILL RWA) · Chainlink/NAV oracle adapters
+ * with depeg CB + NAV shock breaker · per-branch staking, ORA rewards,
+ * soft liquidations · network switcher: local chain / Base Sepolia (MetaMask) */
 "use strict";
 
 const $ = id => document.getElementById(id);
@@ -70,7 +71,11 @@ async function tx(label, fn) {
 
 function connectContracts() {
   const runner = wallet ?? provider;
-  const B = bcfg(), S = dep.shared, A = dep.abis;
+  const B = bcfg(), S = dep && dep.shared, A = dep && dep.abis;
+  if (!B || !S || !A) {
+    toast("Deployment data is stale or missing — hard-refresh the page (Ctrl/Cmd+Shift+R)", 8000);
+    return;
+  }
   C.priceFeed = new ethers.Contract(
     B.priceFeed, B.native ? A.priceFeed : (B.rwa ? A.priceFeedRWA : A.priceFeedWstETH), runner);
   C.aggNav = B.navAggregator
@@ -107,6 +112,8 @@ function setAccount(name) {
 }
 
 function setBranch(name) {
+  if (!dep || !dep.branches) return;
+  if (!dep.branches[name]) name = Object.keys(dep.branches)[0];
   branch = name;
   document.querySelectorAll(".tab").forEach(t =>
     t.classList.toggle("active", t.dataset.branch === name));
@@ -133,8 +140,9 @@ function updateSimControls() {
 
 async function setNetwork(mode) {
   try {
-    if (mode === "baseSepolia") {
-      const r = await fetch("deployment-baseSepolia.json");
+    const local = mode !== "baseSepolia";
+    if (!local) {
+      const r = await fetch("deployment-baseSepolia.json?ts=" + Date.now());
       if (!r.ok) {
         toast("Base Sepolia not deployed yet — run the DEPLOY_BASE_SEPOLIA.md runbook, commit deployment-baseSepolia.json, and reload.", 9000);
         $("networkSelect").value = netMode;
@@ -149,16 +157,27 @@ async function setNetwork(mode) {
       $("btnFaucet").disabled = true;
       $("addr").textContent = "read-only — connect a wallet to transact";
     } else {
-      dep = await (await fetch("deployment.json")).json();
+      dep = await (await fetch("deployment.json?ts=" + Date.now())).json();
       netMode = "local";
       provider = new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true });
       treasury = new ethers.NonceManager(new ethers.Wallet(TREASURY_KEY, provider));
       $("accountSelect").style.display = "inline-block";
       $("btnConnect").style.display = "none";
       $("btnFaucet").disabled = false;
-      setAccount($("accountSelect").value);
     }
-    setBranch("ETH");
+
+    // Guard against stale/partial deployment files (e.g. cached from an older
+    // phase, or a public deployment made before newer branches existed).
+    if (!dep || !dep.branches || !dep.abis || !dep.shared) {
+      throw new Error("deployment file is invalid or from an old build — hard-refresh the page (Ctrl/Cmd+Shift+R)");
+    }
+    // Only show tabs for branches this deployment actually has
+    document.querySelectorAll(".tab").forEach(t =>
+      (t.style.display = dep.branches[t.dataset.branch] ? "" : "none"));
+    if (!dep.branches[branch]) branch = Object.keys(dep.branches)[0];
+
+    if (local) setAccount($("accountSelect").value);
+    setBranch(dep.branches.ETH ? "ETH" : Object.keys(dep.branches)[0]);
     await refresh();
   } catch (e) {
     toast("Network switch failed: " + reason(e), 8000);
