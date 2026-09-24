@@ -19,12 +19,13 @@ async function main() {
   const ora = new ethers.Contract(S.oraToken, A.oraToken, provider);
   const usd = new ethers.Contract(S.orUSDToken, A.orUSDToken, provider);
 
-  // ---- Claim 1: orUSD minted by borrowing, min 110% ICR ----
-  console.log("\nClaim: orUSD minted against collateral at min 110% ICR");
+  // ---- Claim 1: orUSD minted by borrowing, per-branch minimum ICR ----
+  console.log("\nClaim: orUSD minted against collateral at the branch's declared MCR");
   for (const [name, B] of Object.entries(dep.branches)) {
     const tm = new ethers.Contract(B.troveManager, A.troveManager, provider);
     const mcr = await tm.MCR();
-    check(`${name} branch MCR = 110%`, mcr === 1100000000000000000n, ethers.formatEther(mcr));
+    const expected = ethers.parseEther(String(B.mcr || 1.1));
+    check(`${name} branch MCR = ${((B.mcr || 1.1) * 100).toFixed(0)}%`, mcr === expected, ethers.formatEther(mcr));
   }
   const registrar = await usd.branchRegistrar();
   check("orUSD mint/burn restricted to registered branch contracts",
@@ -135,6 +136,32 @@ async function main() {
   const cap3 = await bo3.debtCap();
   check("RWA branch debt cap frozen at deployment", cap3 === 2000000n * E18,
     Number(cap3 / E18).toLocaleString("en-US") + " orUSD, owner renounced above");
+
+  // ---- Claim: RWA branch — capital-efficient params + protocol yield share ----
+  console.log("\nClaim: RWA branch runs MCR 105% / CCR 115% and skims 2%/yr of collateral yield to the treasury");
+  const B3 = dep.branches.tBILL;
+  const tm3 = new ethers.Contract(B3.troveManager, A.troveManagerRWA, provider);
+  check("tBILL CCR = 115%", (await tm3.CCR()) === ethers.parseEther("1.15"), ethers.formatEther(await tm3.CCR()));
+  check("tBILL soft-liq floor = 103%", (await tm3.SOFT_LIQ_FLOOR()) === ethers.parseEther("1.03"));
+  const wt = new ethers.Contract(B3.collToken, A.wtBill, provider);
+  check("wmTBILL skim rate = 2%/yr", (await wt.SKIM_RATE_PER_YEAR()) === ethers.parseEther("0.02"));
+  const feeRecv = await wt.feeReceiver();
+  check("wmTBILL skim accrues to the protocol treasury", feeRecv.toLowerCase() !== ethers.ZeroAddress, feeRecv);
+  const wfeed = new ethers.Contract(B3.priceFeed, A.wtBillPriceFeed, provider);
+  const nav = new ethers.Contract(B3.navPriceFeed, A.priceFeedRWA, provider);
+  const composite = await wfeed.getPrice();
+  const expectedP = (await nav.getPrice()) * (await wt.currentRate()) / E18;
+  check("wmTBILL priced at NAV × wrapper rate", composite === expectedP, ethers.formatEther(composite));
+
+  // ---- Claim: one-click leverage (rates branch) ----
+  console.log("\nClaim: one-click leverage via per-user Zap proxies on the rates branch");
+  const B4v = dep.branches.ETHv2;
+  const zf = new ethers.Contract(B4v.leverZapFactory, A.leverZapFactory, provider);
+  check("LeverZapFactory wired to the rates branch BorrowerOperations",
+    (await zf.borrowerOps()) === B4v.borrowerOperations);
+  const pool4 = new ethers.Contract(B4v.swapPool, A.oraSwapPool, provider);
+  const rEth = await pool4.reserveETH();
+  check("demo AMM liquid (orUSD/ETH)", rEth > 0n, ethers.formatEther(rEth) + " ETH reserve");
 
   console.log(`\n${pass} passed, ${fail} ${fail ? "FAILED" : "failed"}`);
   if (fail) process.exit(1);

@@ -54,7 +54,7 @@
   <span class="hint">Collateral branch:</span>
   <button class="tab active" id="tabETH" data-branch="ETH">ETH</button>
   <button class="tab" id="tabWstETH" data-branch="wstETH">wstETH</button>
-  <button class="tab" id="tabTBILL" data-branch="tBILL">mTBILL <span class="new">RWA</span></button>
+  <button class="tab" id="tabTBILL" data-branch="tBILL">wmTBILL <span class="new">RWA</span></button>
   <button class="tab" id="tabETHv2" data-branch="ETHv2">ETH <span class="new">v2 · rates</span></button>
   <button class="mini" id="btnWstFaucet" style="display:none">Get test collateral</button>
 </div>
@@ -162,6 +162,34 @@
       route the accrued stream: 80% to sorUSD savers, 20% to the protocol treasury.</div>
   </div>
 
+  <!-- LEVERAGE ZAPPER (rates branch) -->
+  <div class="card" id="leverCard" style="display:none">
+    <h2>Leverage <span class="hint">one-click leveraged ETH — borrow, swap &amp; redeposit in a single transaction</span></h2>
+    <div class="kv">
+      <div><label>My Position</label><b id="lvPos">—</b></div>
+      <div><label>Debt</label><b id="lvDebt">—</b></div>
+      <div><label>ICR</label><b id="lvIcr">—</b></div>
+      <div><label>AMM Price</label><b id="lvPool">—</b></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Deposit (ETH)</label><input id="lvColl" type="number" value="2" min="0" step="0.5" /></div>
+      <div class="field"><label>Target leverage</label><select id="lvLev">
+        <option value="3333">1.5×</option>
+        <option value="5000">2×</option>
+        <option value="6000" selected>2.5×</option>
+        <option value="6667">3×</option>
+      </select></div>
+      <div class="field"><label>Interest rate (%/yr)</label><input id="lvRate" type="number" value="5" min="0.5" max="100" step="0.5" /></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="btnLvOpen">Open leveraged position</button>
+      <button id="btnLvClose">Close &amp; unwind</button>
+    </div>
+    <div class="hint" style="margin-top:6px" id="lvPreview">Your personal Zap contract opens a trove at your chosen rate, then loops
+      borrow → swap orUSD→ETH on the demo AMM → re-deposit, up to the target leverage. Close unwinds everything — no flash
+      loans — and returns your ETH.</div>
+  </div>
+
   <!-- ORA STAKING -->
   <div class="card">
     <h2>Stake ORA <span class="hint">earn 100% of this branch's fees</span></h2>
@@ -206,6 +234,7 @@
       <span>mTBILL NAV:</span> <b id="simNav">—</b>
       <button class="mini" data-nav="1.004" title="a month of T-bill yield">Accrue +0.4%</button>
       <button class="mini" data-nav="1.14" title="manipulated spike — the feed clamps to +2% per update">Spike +14%</button>
+      <button class="mini" data-nav="0.98" title="a −2% NAV print — drops thin troves into the [103%, 105%) soft-liquidation band">Dip −2%</button>
       <button class="mini" data-nav="0.97" title="break the buck — trips the NAV shock breaker">Shock −3%</button>
       <button class="mini" data-nav="reset">Reset $1.05</button>
       <span class="hint">drops &gt;2% below the high-water mark flag a NAV shock</span>
@@ -220,9 +249,9 @@
 </main>
 
 <div id="toast"></div>
-<footer>ORA Protocol — Liquity-engine core. ETH + wstETH + mTBILL (RWA) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
+<footer>ORA Protocol — Liquity-engine core. ETH + wstETH + wmTBILL (RWA yield-share, MCR 105%) + ETH v2 (user-set rates, one-click leverage) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
 
 <script src="vendor/ethers.umd.min.js"></script>
-<script src="app.js?v=rates1"></script>
+<script src="app.js?v=lever1"></script>
 </body>
 </html>

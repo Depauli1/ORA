@@ -51,7 +51,8 @@
 
 ## 3. Tokenomics
 
-- **orUSD** — the stablecoin. Mint by borrowing against collateral (min 110% ICR). Hard peg: $1 redemption floor + minting ceiling arbitrage.
+- **orUSD** — the stablecoin. Mint by borrowing against collateral (per-branch MCR: 110% on
+  crypto branches, 105% on the T-bill RWA branch). Hard peg: $1 redemption floor + minting ceiling arbitrage.
 - **ORA** (100M fixed supply) — captures protocol revenue:
   - Stake ORA → earn 100% of borrowing + redemption fees (real yield, in ETH/LST + orUSD).
   - Community issuance (32%) streams to Stability Pool depositors and agent-network operators
@@ -60,6 +61,9 @@
   - **Interest economics (rates engine)**: borrowers on rates branches pay a self-chosen
     annual rate, minted continuously as orUSD — 80% to sorUSD savers, 20% to the treasury.
     This is protocol revenue that never depends on emissions.
+  - **RWA yield share (wmTBILL)**: the T-bill branch collateral wrapper skims 2%/yr of the
+    underlying mTBILL to the treasury, in kind — the protocol earns a slice of the T-bill
+    yield on every dollar of RWA collateral, while borrowers keep the remaining ≈3%/yr.
   - No governance theater at launch: minimal, immutable core; parameters per collateral branch set at branch deployment.
     All contract ownership renounced during wiring; the one remaining admin power (the orUSD branch registrar)
     is renounced on production deploys via `ORA_RENOUNCE_REGISTRAR=1`.
@@ -128,6 +132,27 @@
       routing, share-price appreciation, rate-ordered redemption picking the
       0.6%-rate trove over a lower-ICR 9% trove, system-debt invariant to
       sub-dust precision, normal-mode liquidation incl. accrued interest
+- [x] **RWA capital efficiency + protocol yield share (wmTBILL)** — the T-bill
+      branch now runs **per-branch risk params: MCR 105% / CCR 115%**, soft-liq
+      band [103%, 105%) (constants-only forks `TroveManagerRWA` /
+      `BorrowerOperationsRWA` / `StabilityPoolRWA` — T-bill NAV vol is bps, not
+      %; up to ~21× T-bill leverage for cash-and-carry desks). Collateral is
+      **wmTBILL**, a yield-splitting wrapper: each share's mTBILL redemption
+      rate decays linearly at **2%/yr** and the freed mTBILL accrues to the
+      protocol treasury (`WTBill.claimSkim`) — borrowers net ≈ NAV yield − 2%,
+      the protocol earns real in-kind RWA revenue with custody invariant
+      `balance = shares×rate + skimAccrued` (verified to wei dust).
+      `WTBillPriceFeed` prices collateral at NAV × wrapper rate, passing the
+      RWA feed's clamp/shock/staleness machinery through untouched.
+- [x] **One-click leverage (LeverZap)** — per-user Zap proxies
+      (`LeverZapFactory`) on the rates branch: `leverOpen` opens a trove at the
+      user's chosen rate and loops borrow → swap → re-deposit up to ~3×;
+      `leverClose` unwinds iteratively **without flash loans** (repay → free
+      collateral above a 112% safety line → swap back) and returns everything
+      as ETH. Demo venue is `OraSwapPool` (minimal x·y=k orUSD/ETH AMM, 0.3%
+      fee, 40k orUSD/20 ETH seed); on a public chain the zap would route
+      through a real DEX. Verified on-chain: 2 ETH → 2.5×-target →
+      1.98 ETH round trip; 27/27 tests in `scripts/test-rwa-zap.js`.
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 

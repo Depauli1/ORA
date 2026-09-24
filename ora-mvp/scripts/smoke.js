@@ -168,7 +168,8 @@ async function main() {
   const bo3 = new ethers.Contract(B3.borrowerOperations, dep.abis.borrowerOperationsERC20, alice);
   const sp3 = new ethers.Contract(B3.stabilityPool, dep.abis.stabilityPoolERC20, alice);
   const tm3 = new ethers.Contract(B3.troveManager, dep.abis.troveManagerV2, alice);
-  const pf3 = new ethers.Contract(B3.priceFeed, dep.abis.priceFeedRWA, treasury);
+  const pf3 = new ethers.Contract(B3.priceFeed, dep.abis.wtBillPriceFeed, treasury);   // composite: NAV x wrapper rate
+  const nav3 = new ethers.Contract(B3.navPriceFeed, dep.abis.priceFeedRWA, treasury); // underlying NAV feed (clamp/ratchet state)
   const aggNav = new ethers.Contract(B3.navAggregator, dep.abis.settableAggregator, treasury);
 
   console.log("[rwa] mTBILL NAV:", f(await pf3.getPrice()), "| debt cap:", f(await bo3.debtCap()),
@@ -203,7 +204,7 @@ async function main() {
 
   await (await aggNav.setAnswer(120000000n)).wait(); // manipulated +14% spike
   await (await pf3.fetchPrice()).wait();
-  const clamped = await pf3.lastGoodPrice();
+  const clamped = await nav3.lastGoodPrice();
   console.log("[rwa] NAV spike to $1.20 — clamped to:", f(clamped), "(+2% max per update) ✓");
   if (clamped > E("1.0754")) throw new Error("upside clamp failed");
   await (await aggNav.setAnswer(105420000n)).wait(); // honest NAV returns
@@ -213,7 +214,7 @@ async function main() {
   treasury.reset(); alice.reset();
   await (await aggNav.setAnswer(102257000n)).wait();
   await (await pf3.fetchPrice()).wait();
-  const shockPrice = await pf3.lastGoodPrice();
+  const shockPrice = await pf3.getPrice();
   console.log("[rwa] NAV shock -3% — price marked down:", f(shockPrice), "| navShock:", await pf3.navShock());
   if (!(await pf3.navShock())) throw new Error("navShock flag should be active");
 
@@ -225,7 +226,7 @@ async function main() {
   await (await tm3.liquidatePartial(bait)).wait();
   console.log("[rwa] soft-liquidated — ICR restored to:",
     (Number(await tm3.getCurrentICR(bait, shockPrice)) / 1e16).toFixed(2) + "%",
-    "| caller reward:", Number(ethers.formatEther(await tb.balanceOf(aliceAddr) - tbBefore)).toFixed(2), "mTBILL");
+    "| caller reward:", Number(ethers.formatEther(await tb.balanceOf(aliceAddr) - tbBefore)).toFixed(2), "wmTBILL");
 
   // --- 4d. RWA SP depositors earn ORA (own 500k allocation) ---
   await provider.send("evm_increaseTime", [3600]);

@@ -49,28 +49,29 @@ async function main() {
   await (await sp2.connect(signers[9]).provideToSP(E("120000"), Z)).wait();
   console.log("[wstETH] Stability Pool seeded: 120,000 orUSD");
 
-  // ---- Branch 3: mTBILL (RWA) ----
-  const tbill = await ethers.getContractAt("MockTBill", dep.branches.tBILL.collToken);
-  const bo3 = await ethers.getContractAt("BorrowerOperationsERC20", dep.branches.tBILL.borrowerOperations);
-  const sp3 = await ethers.getContractAt("StabilityPoolERC20", dep.branches.tBILL.stabilityPool);
+  // ---- Branch 3: wmTBILL (RWA yield-share, MCR 105%) ----
+  const wtbill = await ethers.getContractAt("WTBill", dep.branches.tBILL.collToken);
+  const bo3 = await ethers.getContractAt("BorrowerOperationsRWA", dep.branches.tBILL.borrowerOperations);
+  const sp3 = await ethers.getContractAt("StabilityPoolRWA", dep.branches.tBILL.stabilityPool);
 
-  // NAV $1.05 — branch TCR must clear CCR (150%), so the whale anchors it
+  // Price ≈ $1.05 (NAV × wrapper rate). MCR 105% / CCR 115%: T-bill desks run
+  // tight. The bait trove sits ~107% so a −2% NAV print drops it into the
+  // [103%, 105%) soft-liquidation band.
   const rwaTroves = [
-    { s: 12, coll: "500000", debt: "300000" }, // treasury desk, ~174%
-    { s: 13, coll: "60000",  debt: "45000"  }, // ~139%
-    { s: 14, coll: "12000",  debt: "11100"  }  // ~111% — soft-liq bait after a NAV shock
+    { s: 12, coll: "500000", debt: "300000" }, // treasury desk, ~175%
+    { s: 13, coll: "60000",  debt: "52000"  }, // ~121%
+    { s: 14, coll: "12000",  debt: "11600"  }  // ~107% — soft-liq bait after a NAV shock
   ];
   for (const t of rwaTroves) {
     const s = signers[t.s];
-    for (let left = BigInt(t.coll); left > 0n; left -= 100000n) {
-      await (await tbill.connect(s).faucet(E((left > 100000n ? 100000n : left).toString()))).wait();
-    }
-    await (await tbill.connect(s).approve(dep.branches.tBILL.borrowerOperations, ethers.MaxUint256)).wait();
+    // WTBill.faucet mints wmTBILL shares directly (it loops the MockTBill faucet internally)
+    await (await wtbill.connect(s).faucet(E(t.coll))).wait();
+    await (await wtbill.connect(s).approve(dep.branches.tBILL.borrowerOperations, ethers.MaxUint256)).wait();
     await (await bo3.connect(s).openTrove(maxFee, E(t.debt), E(t.coll), Z, Z)).wait();
-    console.log(`[mTBILL] trove: ${t.coll} mTBILL / ${t.debt} orUSD (${s.address.slice(0,8)})`);
+    console.log(`[wmTBILL] trove: ${t.coll} wmTBILL / ${t.debt} orUSD (${s.address.slice(0,8)})`);
   }
   await (await sp3.connect(signers[12]).provideToSP(E("250000"), Z)).wait();
-  console.log("[mTBILL] Stability Pool seeded: 250,000 orUSD");
+  console.log("[wmTBILL] Stability Pool seeded: 250,000 orUSD");
 
   // ---- Branch 4: ETH v2 (user-set interest rates) ----
   const bo4 = await ethers.getContractAt("BorrowerOperationsRates", dep.branches.ETHv2.borrowerOperations);
@@ -98,6 +99,13 @@ async function main() {
   await (await orUSD.connect(signers[15]).approve(dep.branches.ETHv2.sorUSDVault, ethers.MaxUint256)).wait();
   await (await vault.connect(signers[15]).deposit(E("25000"))).wait();
   console.log("[ETHv2] sorUSD vault seeded: 25,000 orUSD");
+
+  // Seed the demo orUSD/ETH AMM at the oracle price (~$2000/ETH) so the
+  // one-click leverage zapper has a venue to swap through.
+  const pool = await ethers.getContractAt("OraSwapPool", dep.branches.ETHv2.swapPool);
+  await (await orUSD.connect(signers[15]).approve(dep.branches.ETHv2.swapPool, ethers.MaxUint256)).wait();
+  await (await pool.connect(signers[15]).addLiquidity(E("40000"), { value: E("20") })).wait();
+  console.log("[ETHv2] swap pool seeded: 40,000 orUSD / 20 ETH");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

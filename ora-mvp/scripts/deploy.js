@@ -189,17 +189,22 @@ async function main() {
   await (await branchIssuance2.activate()).wait();
   console.log("  branch 2 wired — BranchStaking + 1M ORA issuance live");
 
-  // ---------------- Branch 3: mTBILL (RWA, strictly isolated) ----------------
-  console.log("\n— Branch 3: mTBILL (RWA) —");
+  // ---------------- Branch 3: wmTBILL (RWA, strictly isolated) ----------------
+  // RWA-tuned parameter fork: MCR 105% / CCR 115% (T-bills are low-vol), soft
+  // band [103%, 105%). Collateral is wmTBILL — the yield-share wrapper that
+  // skims 2%/yr of the mTBILL to the treasury and passes the rest to borrowers.
+  console.log("\n— Branch 3: wmTBILL (RWA yield-share) —");
+  const wtBill = await deploy("WTBill", await a(tBill), treasury.address);
+  const wPriceFeed3 = await deploy("WTBillPriceFeed", await a(priceFeed3), await a(wtBill));
   const sortedTroves3 = await deploy("SortedTroves");
-  const troveManager3 = await deploy("TroveManagerV2");
+  const troveManager3 = await deploy("TroveManagerRWA");
   const activePool3 = await deploy("ActivePoolERC20");
-  const stabilityPool3 = await deploy("StabilityPoolERC20");
+  const stabilityPool3 = await deploy("StabilityPoolRWA");
   const gasPool3 = await deploy("GasPool");
   const defaultPool3 = await deploy("DefaultPoolERC20");
   const collSurplusPool3 = await deploy("CollSurplusPoolERC20");
-  const borrowerOperations3 = await deploy("BorrowerOperationsERC20");
-  const hintHelpers3 = await deploy("HintHelpers");
+  const borrowerOperations3 = await deploy("BorrowerOperationsRWA");
+  const hintHelpers3 = await deploy("HintHelpersRWA");
   const multiTroveGetter3 = await deploy("MultiTroveGetter", await a(troveManager3), await a(sortedTroves3));
   const branchStaking3 = await deploy("BranchStaking");
   const branchIssuance3 = await deploy("BranchCommunityIssuance");
@@ -212,35 +217,35 @@ async function main() {
   await (await troveManager3.setAddresses(
     await a(borrowerOperations3), await a(activePool3), await a(defaultPool3),
     await a(stabilityPool3), await a(gasPool3), await a(collSurplusPool3),
-    await a(priceFeed3), await a(orUSD), await a(sortedTroves3),
+    await a(wPriceFeed3), await a(orUSD), await a(sortedTroves3),
     await a(oraToken), await a(branchStaking3))).wait();
 
   // setCollToken + setDebtCap must precede setAddresses (which renounces ownership).
   // The debt cap is the RWA isolation backstop: this branch can never mint
   // more than RWA_DEBT_CAP orUSD regardless of what happens to the RWA.
-  await (await borrowerOperations3.setCollToken(await a(tBill))).wait();
+  await (await borrowerOperations3.setCollToken(await a(wtBill))).wait();
   await (await borrowerOperations3.setDebtCap(ethers.parseEther(RWA_DEBT_CAP))).wait();
   await (await borrowerOperations3.setAddresses(
     await a(troveManager3), await a(activePool3), await a(defaultPool3),
     await a(stabilityPool3), await a(gasPool3), await a(collSurplusPool3),
-    await a(priceFeed3), await a(sortedTroves3), await a(orUSD), await a(branchStaking3))).wait();
+    await a(wPriceFeed3), await a(sortedTroves3), await a(orUSD), await a(branchStaking3))).wait();
 
-  await (await stabilityPool3.setCollToken(await a(tBill))).wait();
+  await (await stabilityPool3.setCollToken(await a(wtBill))).wait();
   await (await stabilityPool3.setAddresses(
     await a(borrowerOperations3), await a(troveManager3), await a(activePool3),
-    await a(orUSD), await a(sortedTroves3), await a(priceFeed3), await a(branchIssuance3))).wait();
+    await a(orUSD), await a(sortedTroves3), await a(wPriceFeed3), await a(branchIssuance3))).wait();
 
   await (await activePool3.setAddresses(
     await a(borrowerOperations3), await a(troveManager3), await a(stabilityPool3),
-    await a(defaultPool3), await a(collSurplusPool3), await a(tBill))).wait();
+    await a(defaultPool3), await a(collSurplusPool3), await a(wtBill))).wait();
   await (await defaultPool3.setAddresses(
-    await a(troveManager3), await a(activePool3), await a(tBill))).wait();
+    await a(troveManager3), await a(activePool3), await a(wtBill))).wait();
   await (await collSurplusPool3.setAddresses(
     await a(borrowerOperations3), await a(troveManager3), await a(activePool3))).wait();
-  await (await collSurplusPool3.setCollToken(await a(tBill))).wait();
+  await (await collSurplusPool3.setCollToken(await a(wtBill))).wait();
   await (await hintHelpers3.setAddresses(await a(sortedTroves3), await a(troveManager3))).wait();
 
-  await (await branchStaking3.setCollToken(await a(tBill))).wait();
+  await (await branchStaking3.setCollToken(await a(wtBill))).wait();
   await (await branchStaking3.setAddresses(
     await a(oraToken), await a(orUSD), await a(troveManager3),
     await a(borrowerOperations3), await a(activePool3))).wait();
@@ -304,7 +309,14 @@ async function main() {
   await (await oraToken.connect(treasury).transfer(
     await a(branchIssuance4), ethers.parseEther(ETH2_ORA_ALLOCATION))).wait();
   await (await branchIssuance4.activate()).wait();
-  console.log("  branch 4 wired — rates engine + sorUSD vault + 500k ORA issuance live");
+
+  // One-click leverage: demo orUSD/ETH AMM + per-user LeverZap proxies.
+  // On a public chain the zapper would route through a real DEX instead.
+  const swapPool = await deploy("OraSwapPool", await a(orUSD));
+  const leverZapFactory = await deploy("LeverZapFactory",
+    await a(borrowerOperations4), await a(troveManager4), await a(priceFeed),
+    await a(swapPool), await a(orUSD));
+  console.log("  branch 4 wired — rates engine + sorUSD vault + swap pool + LeverZap factory live");
 
   // ---------------- Governance: freeze the branch set ----------------
   // The branch registrar is the ONE live admin power (it can add new
@@ -325,7 +337,11 @@ async function main() {
       `contracts/TestContracts/${name}.sol/${name}.json`,
       `contracts/branches/${name}.sol/${name}.json`,
       `contracts/oracles/${name}.sol/${name}.json`,
-      `contracts/rates/${name}.sol/${name}.json`
+      `contracts/rates/${name}.sol/${name}.json`,
+      `contracts/rwa/${name}.sol/${name}.json`,
+      `contracts/rwa/WTBill.sol/${name}.json`,
+      `contracts/zap/${name}.sol/${name}.json`,
+      `contracts/zap/LeverZap.sol/${name}.json`
     ];
     for (const h of hits) {
       const p = path.join(__dirname, "..", "artifacts", h);
@@ -348,6 +364,7 @@ async function main() {
       ETH: {
         native: true,
         collSymbol: "ETH",
+        mcr: 1.1, ccr: 1.5, softFloor: 1.05,
         priceFeed: await a(priceFeed),
         ethUsdAggregator: ethUsdAggregatorAddr,
         ethUsdSettable,
@@ -365,6 +382,7 @@ async function main() {
       wstETH: {
         native: false,
         collSymbol: "wstETH",
+        mcr: 1.1, ccr: 1.5, softFloor: 1.05,
         collToken: await a(wstETH),
         priceFeed: await a(priceFeed2),
         ethUsdAggregator: ethUsdAggregatorAddr,
@@ -387,9 +405,14 @@ async function main() {
       tBILL: {
         native: false,
         rwa: true,
-        collSymbol: "mTBILL",
-        collToken: await a(tBill),
-        priceFeed: await a(priceFeed3),
+        collSymbol: "wmTBILL",
+        mcr: 1.05, ccr: 1.15, softFloor: 1.03,
+        collToken: await a(wtBill),
+        underlyingToken: await a(tBill),
+        underlyingSymbol: "mTBILL",
+        skimRatePerYear: 0.02,
+        priceFeed: await a(wPriceFeed3),
+        navPriceFeed: await a(priceFeed3),
         navAggregator: await a(aggNav),
         sortedTroves: await a(sortedTroves3),
         troveManager: await a(troveManager3),
@@ -411,6 +434,7 @@ async function main() {
         native: true,
         rates: true,
         collSymbol: "ETH",
+        mcr: 1.1, ccr: 1.5, softFloor: 1.05,
         priceFeed: await a(priceFeed),
         ethUsdAggregator: ethUsdAggregatorAddr,
         ethUsdSettable,
@@ -426,7 +450,9 @@ async function main() {
         multiTroveGetter: await a(multiTroveGetter4),
         communityIssuance: await a(branchIssuance4),
         interestRouter: await a(interestRouter),
-        sorUSDVault: await a(sorUSDVault)
+        sorUSDVault: await a(sorUSDVault),
+        swapPool: await a(swapPool),
+        leverZapFactory: await a(leverZapFactory)
       }
     },
     abis: {
@@ -455,7 +481,15 @@ async function main() {
       stabilityPoolRates: abi("StabilityPoolRates"),
       hintHelpersRates: abi("HintHelpersRates"),
       sorUSDVault: abi("SorUSDVault"),
-      interestRouter: abi("InterestRouter")
+      interestRouter: abi("InterestRouter"),
+      troveManagerRWA: abi("TroveManagerRWA"),
+      borrowerOperationsRWA: abi("BorrowerOperationsRWA"),
+      stabilityPoolRWA: abi("StabilityPoolRWA"),
+      wtBill: abi("WTBill"),
+      wtBillPriceFeed: abi("WTBillPriceFeed"),
+      oraSwapPool: abi("OraSwapPool"),
+      leverZap: abi("LeverZap"),
+      leverZapFactory: abi("LeverZapFactory")
     }
   };
 

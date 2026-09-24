@@ -59,6 +59,14 @@ module.exports = {
         settings: {
           optimizer: { enabled: true, runs: 1 }
         }
+      },
+      // TroveManagerRWA is a constants-only fork of TroveManagerV2 (MCR 105%),
+      // same size profile; runs:1 keeps it under the 24KB limit.
+      "contracts/rwa/TroveManagerRWA.sol": {
+        version: "0.6.11",
+        settings: {
+          optimizer: { enabled: true, runs: 1 }
+        }
       }
     }
   },

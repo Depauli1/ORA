@@ -8,7 +8,11 @@ const $ = id => document.getElementById(id);
 const Z = "0x0000000000000000000000000000000000000000";
 const MAX_FEE = ethers.parseEther("0.05");
 const GAS_COMP = ethers.parseEther("200"); // refunded on close — repay = debt − 200
-const MCR = 1.1;
+// Per-branch risk params (from deployment.json): the RWA T-bill branch runs
+// MCR 105% / CCR 115% with a [103%, 105%) soft-liq band; others 110%/150%.
+const brMcr = () => Number(bcfg().mcr) || 1.1;
+const brSoft = () => Number(bcfg().softFloor) || 1.05;
+const icrClass = icr => icr < brMcr() * 100 + 10 ? "bad" : icr < brMcr() * 100 + 40 ? "warn" : "good";
 
 // Network registry. `testnet` gates simulators/faucets; `local` additionally
 // enables the built-in demo accounts. Mainnet entries are wallet-only and
@@ -124,6 +128,10 @@ function connectContracts() {
   // Rates engine extras (ETH v2 branch)
   C.vault = B.sorUSDVault ? new ethers.Contract(B.sorUSDVault, A.sorUSDVault, runner) : null;
   C.router = B.interestRouter ? new ethers.Contract(B.interestRouter, A.interestRouter, runner) : null;
+  C.zapFactory = B.leverZapFactory && A.leverZapFactory
+    ? new ethers.Contract(B.leverZapFactory, A.leverZapFactory, runner) : null;
+  C.swapPool = B.swapPool && A.oraSwapPool
+    ? new ethers.Contract(B.swapPool, A.oraSwapPool, runner) : null;
   C.collToken = B.native ? null
     : new ethers.Contract(B.collToken, B.rwa ? A.mockTBill : A.mockWstETH, runner);
   C.orUSD = new ethers.Contract(S.orUSDToken, A.orUSDToken, runner);
@@ -161,7 +169,7 @@ function setBranch(name) {
   $("simTitle").textContent = testnet ? "Market Simulator" : "Risky Troves";
   $("simSub").textContent = testnet
     ? "testnet oracle control — crash the market, run liquidations"
-    : "troves nearest liquidation — anyone can liquidate below 110%";
+    : `troves nearest liquidation — anyone can liquidate below ${(brMcr() * 100).toFixed(0)}%`;
   $("depegRow").style.display = testnet && !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
   $("navRow").style.display = testnet && isRWA() ? "flex" : "none";
   $("priceRow").style.display = !testnet || isRWA() ? "none" : "flex";
@@ -172,6 +180,7 @@ function setBranch(name) {
   $("rateAdjustRow").style.display = rates ? "" : "none";
   $("btnRate").style.display = rates ? "inline-block" : "none";
   $("sorusdCard").style.display = rates ? "" : "none";
+  $("leverCard").style.display = rates && bcfg().leverZapFactory ? "" : "none";
   $("troveHint").innerHTML = rates
     ? 'borrow orUSD against <b class="collsym">ETH</b> · pay the rate <b>you</b> choose'
     : 'borrow orUSD against <b class="collsym">' + collSym() + '</b> · 0% interest';
@@ -406,11 +415,11 @@ async function refresh() {
     if (active) {
       const debt = entire[0], coll = entire[1];
       const icr = Number(coll) * price / Number(debt) * 100;
-      const liqPrice = Number(ethers.formatEther(debt)) * MCR / Number(ethers.formatEther(coll));
+      const liqPrice = Number(ethers.formatEther(debt)) * brMcr() / Number(ethers.formatEther(coll));
       $("tvColl").textContent = fmt(coll, 4) + " " + collSym();
       $("tvDebt").textContent = fmt(debt) + " orUSD";
       $("tvIcr").textContent = icr.toFixed(1) + "%";
-      $("tvIcr").className = icr < 120 ? "bad" : icr < 150 ? "warn" : "good";
+      $("tvIcr").className = icrClass(icr);
       $("tvLiq").textContent = "$" + liqPrice.toLocaleString("en-US", { maximumFractionDigits: 2 });
       // Close readiness: full debt minus the refunded 200 orUSD gas comp
       const closeNeed = debt - GAS_COMP;
@@ -451,6 +460,7 @@ async function refresh() {
       $("svApy").textContent = (svTvl > 0n ? Number(aggW) * 0.8 / Number(svTvl) * 100 : 0).toFixed(2) + "%";
       $("svPending").textContent = fmt(pend);
       $("stFee").textContent = (sysDebt > 0n ? Number(aggW) / Number(sysDebt) * 100 : 0).toFixed(2) + "%";
+      await refreshLever();
     }
 
     await refreshTrovesTable();
@@ -459,19 +469,52 @@ async function refresh() {
   }
 }
 
+// Leverage Zapper (rates branch): per-user proxy owns the leveraged trove
+async function myZap() {
+  if (!C.zapFactory || !wallet) return null;
+  const addr = await C.zapFactory.zapOf(myAddr());
+  if (addr === Z) return null;
+  return new ethers.Contract(addr, dep.abis.leverZap, wallet);
+}
+
+async function refreshLever() {
+  if (!C.zapFactory) return;
+  try {
+    if (C.swapPool) {
+      const spot = await C.swapPool.spotPrice();
+      $("lvPool").textContent = "$" + Number(ethers.formatEther(spot)).toLocaleString("en-US", { maximumFractionDigits: 0 }) + " /ETH";
+    }
+    const zap = await myZap();
+    const pos = zap ? await zap.position() : null;
+    if (pos && pos[3] === 1n) {
+      const debt = pos[0], coll = pos[1];
+      const icr = Number(coll) * price / Number(debt) * 100;
+      $("lvPos").textContent = fmt(coll, 3) + " ETH @ " + (Number(pos[2]) / 1e16).toFixed(1) + "%";
+      $("lvDebt").textContent = fmt(debt) + " orUSD";
+      $("lvIcr").textContent = icr.toFixed(1) + "%";
+      $("lvIcr").className = icrClass(icr);
+    } else {
+      $("lvPos").textContent = "none";
+      $("lvDebt").textContent = "—";
+      $("lvIcr").textContent = "—";
+      $("lvIcr").className = "";
+    }
+  } catch (e) { console.error(e); }
+}
+
 function updateOpenPreview(rate) {
   const coll = parseFloat($("openColl").value) || 0;
   const borrow = parseFloat($("openDebt").value) || 0;
   const fee = borrow * Number(rate ?? 5n * 10n ** 15n) / 1e18;
   const totalDebt = borrow + fee + 200;
   const icr = totalDebt > 0 ? (coll * price / totalDebt) * 100 : 0;
-  const cls = icr < 120 ? "bad" : icr < 150 ? "warn" : "good";
+  const cls = icrClass(icr);
   const ratePct = parseFloat($("openRate").value) || 0;
   $("openPreview").innerHTML =
     (isRates()
       ? `Interest: <b>≈${(totalDebt * ratePct / 100).toFixed(0)} orUSD/yr</b> at ${ratePct}%/yr (no upfront fee) · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`
       : `Fee: <b>${fee.toFixed(2)} orUSD</b> · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`) +
-    `Collateral ratio: <b class="${cls}">${icr.toFixed(1)}%</b> — liquidation below 110%` +
+    `Collateral ratio: <b class="${cls}">${icr.toFixed(1)}%</b> — liquidation below ${(brMcr() * 100).toFixed(0)}%` +
     (borrow < 1800 ? ' · <span class="bad">minimum borrow is 1,800 orUSD</span>' : "") +
     (bcfg().debtCap ? ` · isolated branch: debt cap ${Number(bcfg().debtCap).toLocaleString("en-US")} orUSD` : "");
 }
@@ -489,19 +532,19 @@ async function refreshTrovesTable() {
     ri++;
     const owner = r[0], debt = r[1], coll = r[2];
     const icr = Number(coll) * price / Number(debt) * 100;
-    const liq = icr < MCR * 100;
-    // Phase 2 (non-ETH branches): troves in the soft band [105%, 110%) can be
-    // partially liquidated at a 3% premium instead of fully at ~10%
-    const soft = !isNative() && liq && icr >= 105;
+    const liq = icr < brMcr() * 100;
+    // Phase 2 (non-ETH branches): troves in the soft band [softFloor, MCR) can
+    // be partially liquidated at a 3% premium instead of fully at ~10%
+    const soft = !isNative() && liq && icr >= brSoft() * 100;
     const tr = document.createElement("tr");
     if (liq) tr.className = "liq";
     tr.innerHTML =
       `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}` +
       (rowRates ? ` <span class="hint">@ ${(Number(rowRates[ri]) / 1e16).toFixed(1)}%</span>` : "") + `</td>` +
       `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
-      `<td class="${liq ? "bad" : icr < 150 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
+      `<td class="${liq ? "bad" : icr < brMcr() * 100 + 40 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
       `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button>` +
-      (soft ? ` <button class="mini" data-softliq="${owner}" title="Partial liquidation: restores the trove to 110% at a 3% premium">Soft-liq</button>` : "") +
+      (soft ? ` <button class="mini" data-softliq="${owner}" title="Partial liquidation: restores the trove to ${(brMcr() * 100).toFixed(0)}% at a 3% premium">Soft-liq</button>` : "") +
       `</td>`;
     tbody.appendChild(tr);
   }
@@ -680,6 +723,34 @@ async function main() {
       if (p === 0n) throw new Error("nothing pending — interest lands in the router whenever a trove is touched (or poke accrueTroveInterest)");
       return C.router.distribute();
     });
+  });
+
+  // Leverage zapper (rates branch)
+  $("btnLvOpen").addEventListener("click", async () => {
+    if (!wallet) return toast("Connect a wallet first");
+    const collEth = parseFloat($("lvColl").value) || 0;
+    const ltvBps = BigInt($("lvLev").value);
+    const ratePct = parseFloat($("lvRate").value) || 5;
+    const firstBorrow = collEth * price * Number(ltvBps) / 10000;
+    if (firstBorrow < 1800) {
+      return toast(`Deposit too small — the first loop must borrow ≥ 1,800 orUSD (needs ≈ ${(1800 * 10000 / Number(ltvBps) / price).toFixed(2)} ETH at this leverage)`, 8000);
+    }
+    let zap = await myZap();
+    if (!zap) {
+      await tx("Create your personal leverage Zap", () => C.zapFactory.createZap());
+      zap = await myZap();
+      if (!zap) return;
+    }
+    const lev = (10000 / (10000 - Number(ltvBps))).toFixed(1);
+    tx(`Open ~${lev}× leverage with ${collEth} ETH`, () =>
+      zap.leverOpen(ethers.parseEther((ratePct / 100).toFixed(6)), ltvBps, 6n,
+        { value: ethers.parseEther(String(collEth)) }));
+  });
+  $("btnLvClose").addEventListener("click", async () => {
+    if (!wallet) return toast("Connect a wallet first");
+    const zap = await myZap();
+    if (!zap) return toast("No leverage position to close");
+    tx("Close & unwind leveraged position", () => zap.leverClose());
   });
 
   const stkAmt = () => ethers.parseEther($("stkInput").value || "0");
