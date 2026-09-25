@@ -469,12 +469,24 @@ async function main() {
   await (await branchIssuance4.activate()).wait();
 
   // One-click leverage: demo orUSD/ETH AMM + per-user LeverZap proxies.
-  // On a public chain the zapper would route through a real DEX instead.
-  const swapPool = await deploy("OraSwapPool", await a(orUSD));
-  const leverZapFactory = await deploy("LeverZapFactory",
-    await a(borrowerOperations4), await a(troveManager4), await a(priceFeed),
-    await a(swapPool), await a(orUSD));
-  console.log("  branch 4 wired — rates engine + sorUSD vault + swap pool + LeverZap factory live");
+  // TESTNET-ONLY VENUE: on mainnet chains the pool is skipped entirely (its
+  // constructor would revert as a backstop) and LeverZapFactory is left
+  // unwired — production leverage routes through a real DEX (Aerodrome /
+  // Uniswap) once the venue adapter lands. Manifest fields stay present but
+  // null so every consumer (app, seeds, verifiers) degrades explicitly.
+  const { isMainnetChainId } = require("./deploy-guards");
+  const deployChainId = Number((await ethers.provider.getNetwork()).chainId);
+  let swapPool = null, leverZapFactory = null;
+  if (isMainnetChainId(deployChainId)) {
+    console.log(`  chain ${deployChainId} is mainnet — skipping OraSwapPool + LeverZapFactory (testnet-only venue)`);
+  } else {
+    swapPool = await deploy("OraSwapPool", await a(orUSD));
+    leverZapFactory = await deploy("LeverZapFactory",
+      await a(borrowerOperations4), await a(troveManager4), await a(priceFeed),
+      await a(swapPool), await a(orUSD));
+  }
+  console.log("  branch 4 wired — rates engine + sorUSD vault" +
+    (swapPool ? " + swap pool + LeverZap factory live" : " (no demo AMM on mainnet)"));
 
   // ---------------- Governance: freeze the branch set ----------------
   // The branch registrar is the ONE live admin power (it can add new
@@ -624,8 +636,8 @@ async function main() {
         communityIssuance: await a(branchIssuance4),
         interestRouter: await a(interestRouter),
         sorUSDVault: await a(sorUSDVault),
-        swapPool: await a(swapPool),
-        leverZapFactory: await a(leverZapFactory)
+        swapPool: swapPool ? await a(swapPool) : null,
+        leverZapFactory: leverZapFactory ? await a(leverZapFactory) : null,
       }
     },
     abis: {

@@ -24,6 +24,11 @@ contract OraSwapPool {
 
     constructor(address _orUSD) {
         require(_orUSD != address(0), "OraSwapPool: zero address");
+        // Mainnet backstop (defense in depth — deploy.js also refuses to
+        // deploy this venue outside testnets): the demo AMM must never hold
+        // real liquidity. Ethereum + Base mainnet denylisted; every test
+        // chain (local, Sepolia, Base Sepolia, forks thereof) unaffected.
+        require(block.chainid != 1 && block.chainid != 8453, "OraSwapPool: testnet-only venue");
         orUSD = IERC20(_orUSD);
     }
 

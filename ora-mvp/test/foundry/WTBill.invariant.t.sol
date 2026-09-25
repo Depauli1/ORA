@@ -16,10 +16,12 @@ contract WTBillInvariantTest is StdInvariant, Test {
     function setUp() public {
         handler = new WTBillHandler();
         // Foundry only lets the test contract itself touch cheatcodes by
-        // default; the handler's opWarp needs an explicit grant, otherwise
-        // the vm.warp call reverts as "non-contract address" (and, oddly,
-        // that revert escapes the handler's try/catch and fails the run).
+        // default; the handler's opWarp needs an explicit grant (and the
+        // handler's own warpsEnabled flag — Hardhat's EVM, which runs the
+        // same handler in test/invariant-drivers.test.js, has no cheatcode
+        // dispatcher, so the flag keeps the JS driver off the VM address).
         vm.allowCheatcodes(address(handler));
+        handler.enableWarps();
         targetContract(address(handler));
     }
 

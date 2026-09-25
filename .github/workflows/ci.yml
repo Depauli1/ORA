@@ -91,8 +91,6 @@ jobs:
   foundry:
     name: Foundry invariant tests
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -102,20 +100,7 @@ jobs:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
       - name: Invariant suites (WTBill custody, sorUSD backing)
-        run: |
-          set -o pipefail
-          forge test -vvv 2>&1 | tee ../forge-output.txt
-      # TEMPORARY DEBUG (revert after green): CI logs are unreadable from the
-      # sandbox, so post the failure tail to the PR instead.
-      - name: DEBUG post forge tail
-        if: failure()
-        working-directory: .
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number')
-          { echo "run ${{ github.run_id }} (foundry):"; echo '```'; tail -c 45000 forge-output.txt; echo '```'; } > /tmp/forge-body.md
-          gh pr comment "$PR" --body-file /tmp/forge-body.md
+        run: forge test
 
   oracle-config:
     name: Oracle prod-config gate

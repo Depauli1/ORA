@@ -6,6 +6,10 @@
 // Usage:
 //   node scripts/gen-deployer.js          # once; fund the printed address
 //   npx hardhat run scripts/deploy-public.js --network baseSepolia
+//
+// Testnet-only venues (OraSwapPool demo AMM + LeverZapFactory) are skipped
+// automatically on mainnet chains (see scripts/deploy-guards.js) — the
+// manifest keeps the fields as null and the app/seeds/verifiers degrade.
 const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");

@@ -156,12 +156,16 @@ async function main() {
   // ---- Claim: one-click leverage (rates branch) ----
   console.log("\nClaim: one-click leverage via per-user Zap proxies on the rates branch");
   const B4v = dep.branches.ETHv2;
-  const zf = new ethers.Contract(B4v.leverZapFactory, A.leverZapFactory, provider);
-  check("LeverZapFactory wired to the rates branch BorrowerOperations",
-    (await zf.borrowerOps()) === B4v.borrowerOperations);
-  const pool4 = new ethers.Contract(B4v.swapPool, A.oraSwapPool, provider);
-  const rEth = await pool4.reserveETH();
-  check("demo AMM liquid (orUSD/ETH)", rEth > 0n, ethers.formatEther(rEth) + " ETH reserve");
+  if (!B4v.leverZapFactory || !B4v.swapPool) {
+    console.log("  (demo AMM + LeverZapFactory absent on this chain — testnet-only venue, skipping)");
+  } else {
+    const zf = new ethers.Contract(B4v.leverZapFactory, A.leverZapFactory, provider);
+    check("LeverZapFactory wired to the rates branch BorrowerOperations",
+      (await zf.borrowerOps()) === B4v.borrowerOperations);
+    const pool4 = new ethers.Contract(B4v.swapPool, A.oraSwapPool, provider);
+    const rEth = await pool4.reserveETH();
+    check("demo AMM liquid (orUSD/ETH)", rEth > 0n, ethers.formatEther(rEth) + " ETH reserve");
+  }
 
   console.log(`\n${pass} passed, ${fail} ${fail ? "FAILED" : "failed"}`);
   if (fail) process.exit(1);

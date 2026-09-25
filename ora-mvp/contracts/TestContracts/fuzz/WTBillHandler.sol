@@ -26,7 +26,17 @@ interface ICheatCodes {
 }
 
 contract WTBillHandler {
-    ICheatCodes constant vm = ICheatCodes(0x7109709ecfa91A80626Ff3989d68F67f682E52aF);
+    // Canonical Foundry cheatcode address (must match forge-std's VM_ADDRESS
+    // in lib/forge-std/src/Base.sol exactly — a typo here fails the run with
+    // "call to non-contract address").
+    ICheatCodes constant vm = ICheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+
+    // True only under forge (set by the invariant test's setUp). Hardhat's
+    // EVM has no cheatcode dispatcher: attempting vm.warp there faults the
+    // whole call in a way try/catch cannot catch, so opWarp skips it and
+    // the JS driver advances EDR time from ghost_warped instead.
+    bool public warpsEnabled;
+    function enableWarps() external { warpsEnabled = true; }
 
     WTBill public wtbill;
     MockTBill public underlying;
@@ -73,9 +83,12 @@ contract WTBillHandler {
     function opWarp(uint256 _dt) external {
         uint256 dt = _dt % (MAX_WARP + 1);
         ghost_warped += dt;
-        // forge: warps; Hardhat EDR: empty account reverts, caught, and the
-        // JS driver mirrors time via evm_increaseTime instead.
-        try vm.warp(block.timestamp + dt) {} catch {}
+        // warpsEnabled is set only by the Foundry test; the Hardhat driver
+        // leaves it false and mirrors time via evm_increaseTime instead
+        // (a vm.warp attempt on EDR faults outside try/catch's reach).
+        if (warpsEnabled) {
+            try vm.warp(block.timestamp + dt) {} catch {}
+        }
         _checkpoint();
     }
 
