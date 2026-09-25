@@ -2,8 +2,8 @@
 
 The protocol graduates from the local demo chain to Base Sepolia through a
 GitHub Actions pipeline (the dev sandbox cannot reach public RPCs, so CI is
-the deploy machine). Everything is automated except one step: **funding the
-deployer with faucet ETH**.
+the deploy machine). The manual prerequisites are provisioning a fresh
+CI-only deployer key and funding its address with faucet ETH.
 
 ## How it works
 
@@ -12,14 +12,16 @@ fund deployer ──> touch ora-mvp/.deploy-testnet-trigger ──> push
                                         │
                      .github/workflows/deploy-testnet.yml
                                         │
-        npm ci → check funding → compile → deploy-public → seed-public
+        npm ci → check chain/funding → compile → deploy-public → seed-public
+                                        │
+        validate manifest + address replay + on-chain code + invariants
                                         │
           commits app/deployment-baseSepolia.json back to the branch
                                         │
         ORA web app → network switch "Base Sepolia" → MetaMask → live
 ```
 
-## 1. Fund the deployer (the only manual step)
+## 1. Provision and fund the deployer
 
 The pipeline deploys from a throwaway, testnet-only key that lives ONLY in
 CI secrets — never in the repo. Set it once as repo owner:
@@ -29,6 +31,10 @@ CI secrets — never in the repo. Set it once as repo owner:
 2. Add it as an Actions secret named `DEPLOYER_KEY`
    (Settings → Secrets and variables → Actions → New repository secret).
 3. Fund the printed address from a Base Sepolia faucet below.
+
+The workflow preflight refuses to proceed unless the configured RPC reports
+chain ID `84532`. `ORA_RPC_URL` can select a more reliable Base Sepolia RPC;
+a wrong-network endpoint fails before any deployment transaction.
 
 > Rotation note: an earlier revision of this repo committed a throwaway
 > testnet key (`.testnet-deployer.key`, deployer
@@ -64,15 +70,22 @@ git add ora-mvp/.deploy-testnet-trigger && git commit -m "deploy: Base Sepolia" 
 ```
 
 The workflow (Actions tab → "Deploy ORA to Base Sepolia"):
-1. **Fails fast with faucet instructions** if the deployer is unfunded — that
-   is the expected first-run state, not an error in the pipeline.
-2. Deploys all four branches (ETH, wstETH, wmTBILL RWA, ETH v2 rates) + the
-   swap pool and LeverZap factory, wiring identical to the local chain.
+1. **Fails fast with setup/faucet instructions** if the Actions key is missing,
+   the RPC is not Base Sepolia, or the deployer is underfunded — these are
+   prerequisite failures, not deployment defects.
+2. Confirms the RPC is Base Sepolia (chain ID 84532), then deploys all four
+   branches (ETH, wstETH, wmTBILL RWA, ETH v2 rates) + the swap pool and
+   LeverZap factory, wiring identical to the local chain.
 3. Derives the treasury wallet from the deployer key (`deploy-public.js`) so
    the ORA faucet allocation is not transfer-locked (LQTYToken locks the
    multisig=deployer for year 1).
 4. Seeds first troves / SP deposits / vault / AMM as balance allows.
-5. Commits `app/deployment-baseSepolia.json` to this branch.
+5. Gates publication on the four-branch manifest and risk parameters, nonce
+   replay of every deployment address, bytecode at every recorded address,
+   and a live one-shot invariant check (oracle prices, collateral custody,
+   Stability Pool backing, RWA/vault/AMM accounting). If a gate fails, the
+   manifest is not committed.
+6. Commits `app/deployment-baseSepolia.json` to this branch.
 
 ## 3. Use it
 

@@ -6,7 +6,12 @@
 // revert string is compiled into the deployment bytecode.
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { MAINNET_CHAIN_IDS, isMainnetChainId } = require("../scripts/deploy-guards");
+const {
+  MAINNET_CHAIN_IDS,
+  BASE_SEPOLIA_CHAIN_ID,
+  assertBaseSepoliaChainId,
+  isMainnetChainId,
+} = require("../scripts/deploy-guards");
 
 describe("deploy guards", () => {
   it("denylists Ethereum + Base mainnet, allows all test chains", () => {
@@ -16,6 +21,13 @@ describe("deploy guards", () => {
       expect(isMainnetChainId(testnet), `chain ${testnet}`).to.equal(false);
     }
     expect([...MAINNET_CHAIN_IDS].sort((a, b) => a - b)).to.deep.equal([1, 8453]);
+  });
+
+  it("deployment preflight accepts only Base Sepolia", () => {
+    expect(BASE_SEPOLIA_CHAIN_ID).to.equal(84532);
+    expect(assertBaseSepoliaChainId("84532")).to.equal(84532);
+    expect(() => assertBaseSepoliaChainId(31337)).to.throw(/expected Base Sepolia chainId 84532, got 31337/);
+    expect(() => assertBaseSepoliaChainId(8453)).to.throw(/expected Base Sepolia chainId 84532, got 8453/);
   });
 
   it("OraSwapPool bytecode carries the testnet-only backstop", async () => {

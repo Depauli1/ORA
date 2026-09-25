@@ -1,9 +1,10 @@
-// Pre-deploy gate for CI: verifies the deployer key resolves and the address
-// holds enough Base Sepolia ETH to deploy. Exits 1 with funding instructions
-// if not — this is the expected "waiting for faucet" state of the pipeline.
+// Pre-deploy gate for CI: verifies the deployer key resolves, the RPC is
+// actually Base Sepolia, and the address holds enough test ETH to deploy.
+// Exits 1 with setup/funding instructions before any deployment transaction.
 const { ethers } = require("ethers");
 const fs = require("fs");
 const path = require("path");
+const { assertBaseSepoliaChainId } = require("./deploy-guards");
 
 const RPC = process.env.ORA_RPC_URL || "https://sepolia.base.org";
 const MIN = ethers.parseEther(process.env.ORA_MIN_DEPLOY_ETH || "0.03");
@@ -21,6 +22,7 @@ async function main() {
   const wallet = new ethers.Wallet(deployerKey());
   const provider = new ethers.JsonRpcProvider(RPC, undefined, { staticNetwork: true });
   const [bal, net] = await Promise.all([provider.getBalance(wallet.address), provider.getNetwork()]);
+  assertBaseSepoliaChainId(net.chainId);
   console.log(`Network:  chainId ${net.chainId} (${RPC})`);
   console.log(`Deployer: ${wallet.address}`);
   console.log(`Balance:  ${ethers.formatEther(bal)} ETH (need >= ${ethers.formatEther(MIN)})`);

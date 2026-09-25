@@ -8,6 +8,15 @@
 // (local dev chains, Sepolia, Base Sepolia, forks). Add new production
 // targets here BEFORE their first deploy — never remove entries.
 const MAINNET_CHAIN_IDS = new Set([1, 8453]); // Ethereum, Base
+const BASE_SEPOLIA_CHAIN_ID = 84532;
+
+function assertBaseSepoliaChainId(chainId) {
+  const actual = Number(chainId);
+  if (actual !== BASE_SEPOLIA_CHAIN_ID) {
+    throw new Error(`expected Base Sepolia chainId ${BASE_SEPOLIA_CHAIN_ID}, got ${actual}`);
+  }
+  return actual;
+}
 
 function isMainnetChainId(chainId) {
   return MAINNET_CHAIN_IDS.has(Number(chainId));
@@ -17,4 +26,10 @@ async function deploymentChainId(ethers) {
   return Number((await ethers.provider.getNetwork()).chainId);
 }
 
-module.exports = { MAINNET_CHAIN_IDS, isMainnetChainId, deploymentChainId };
+module.exports = {
+  MAINNET_CHAIN_IDS,
+  BASE_SEPOLIA_CHAIN_ID,
+  assertBaseSepoliaChainId,
+  isMainnetChainId,
+  deploymentChainId,
+};
