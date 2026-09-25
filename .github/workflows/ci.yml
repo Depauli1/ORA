@@ -91,8 +91,6 @@ jobs:
   foundry:
     name: Foundry invariant tests
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -102,20 +100,7 @@ jobs:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
       - name: Invariant suites (WTBill custody, sorUSD backing)
-        run: |
-          set -o pipefail
-          forge test -vvv 2>&1 | tee ../forge-output.txt
-      # TEMPORARY DEBUG (revert after green): CI logs are unreadable from the
-      # sandbox, so post the failure tail to the PR instead.
-      - name: DEBUG post forge tail
-        if: failure()
-        working-directory: .
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number')
-          { echo "run ${{ github.run_id }} (foundry):"; echo '```'; tail -c 45000 forge-output.txt; echo '```'; } > /tmp/forge-body.md
-          gh pr comment "$PR" --body-file /tmp/forge-body.md
+        run: forge test
 
   oracle-config:
     name: Oracle prod-config gate
@@ -134,8 +119,6 @@ jobs:
   fork:
     name: Fork tests (Base Sepolia)
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -148,21 +131,9 @@ jobs:
           cache-dependency-path: ora-mvp/package-lock.json
       - run: npm ci
       - name: Fork reads against live Base Sepolia state
-        run: |
-          set -o pipefail
-          npx hardhat test test/fork-reads.test.js 2>&1 | tee ../fork-output.txt
+        run: npx hardhat test test/fork-reads.test.js
         env:
           ORA_FORK_URL: ${{ secrets.ORA_FORK_RPC_URL || 'https://sepolia.base.org' }}
-      # TEMPORARY DEBUG (revert after green): see foundry job above.
-      - name: DEBUG post fork tail
-        if: failure()
-        working-directory: .
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number')
-          { echo "run ${{ github.run_id }} (fork):"; echo '```'; tail -c 45000 fork-output.txt; echo '```'; } > /tmp/fork-body.md
-          gh pr comment "$PR" --body-file /tmp/fork-body.md
 
   keeper-load:
     name: Keeper scan load test (500 troves)

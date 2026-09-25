@@ -6,3 +6,4 @@ bin/
 .testnet-deployer.key
 coverage.json
 coverage/
+out/

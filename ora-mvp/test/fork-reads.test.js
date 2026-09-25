@@ -26,6 +26,15 @@ async function retry(label, fn, tries = 3) {
 }
 
 (FORK ? describe : describe.skip)("fork reads — Base Sepolia", () => {
+  // Mine one local block first: until a local block exists, eth_calls execute
+  // "on the historical fork block" and EDR errors out (it has no hardfork
+  // history for chain 84532). A zero-value self-transfer is the cheapest way
+  // to move execution onto a local block; timestamps stay fork-accurate.
+  before(async () => {
+    const [signer] = await ethers.getSigners();
+    await (await signer.sendTransaction({ to: signer.address, value: 0 })).wait();
+  });
+
   it("forked state is present (remote contract code is visible)", async () => {
     // NOTE: Hardhat keeps the LOCAL chainId (31337) in fork mode, so an
     // eth_chainId assertion would be wrong — remote code presence is the
