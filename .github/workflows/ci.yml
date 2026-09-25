@@ -91,6 +91,8 @@ jobs:
   foundry:
     name: Foundry invariant tests
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -100,7 +102,19 @@ jobs:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
       - name: Invariant suites (WTBill custody, sorUSD backing)
-        run: forge test
+        run: |
+          set -o pipefail
+          forge test -vvv 2>&1 | tee ../forge-output.txt
+      # TEMPORARY DEBUG (revert after green): CI logs are unreadable from the
+      # sandbox, so post the failure tail to an issue instead.
+      - name: DEBUG post forge tail
+        if: failure()
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; echo '```'; tail -c 45000 forge-output.txt; echo '```'; } > /tmp/forge-body.md
+          gh issue create --title "[debug] foundry ${{ github.run_id }}" --body-file /tmp/forge-body.md
 
   oracle-config:
     name: Oracle prod-config gate
@@ -119,6 +133,8 @@ jobs:
   fork:
     name: Fork tests (Base Sepolia)
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -131,9 +147,20 @@ jobs:
           cache-dependency-path: ora-mvp/package-lock.json
       - run: npm ci
       - name: Fork reads against live Base Sepolia state
-        run: npx hardhat test test/fork-reads.test.js
+        run: |
+          set -o pipefail
+          npx hardhat test test/fork-reads.test.js 2>&1 | tee ../fork-output.txt
         env:
           ORA_FORK_URL: ${{ secrets.ORA_FORK_RPC_URL || 'https://sepolia.base.org' }}
+      # TEMPORARY DEBUG (revert after green): see foundry job above.
+      - name: DEBUG post fork tail
+        if: failure()
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; echo '```'; tail -c 45000 fork-output.txt; echo '```'; } > /tmp/fork-body.md
+          gh issue create --title "[debug] fork ${{ github.run_id }}" --body-file /tmp/fork-body.md
 
   keeper-load:
     name: Keeper scan load test (500 troves)
