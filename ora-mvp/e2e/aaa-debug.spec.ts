@@ -1,51 +1,66 @@
 import { test, expect } from "@playwright/test";
 
-// TEMPORARY diagnostic spec — pinpoints the CI-only faucet failure.
-// One bit decides the fix: does /config say faucet:false from the CI
-// browser (server-side: FAUCET_KEY missing) while the row is hidden —
-// or faucet:true while the row is still hidden (app-side race)?
-test("diagnose faucet row visibility", async ({ page }) => {
+// TEMPORARY diagnostic spec #2 — the faucet row is healthy when this spec
+// runs first, but hidden in app.spec's first boot. Capture the row's full
+// lifecycle (MutationObserver installed before app scripts run) plus the
+// app's own /config fetch status (PerformanceResourceTiming.responseStatus).
+test("diagnose faucet row lifecycle", async ({ page }) => {
   const events: string[] = [];
-  page.on("response", (r) => { if (r.url().includes("/config")) events.push(`boot /config -> ${r.status()}`); });
-  page.on("requestfailed", (r) => { if (r.url().includes("/config")) events.push(`boot /config FAILED ${r.failure()?.errorText}`); });
+  page.on("response", (r) => {
+    const u = r.url();
+    if (u.includes("/config")) events.push(`[net] /config -> ${r.status()} @${Date.now() % 100000}`);
+  });
+  page.on("requestfailed", (r) => {
+    if (r.url().includes("/config")) events.push(`[net] /config FAILED ${r.failure()?.errorText}`);
+  });
+
+  // Runs before the app's module scripts: watch every `hidden` flip.
+  // (Deferred module scripts run before DOMContentLoaded, but boot()'s
+  // network flip happens in async fetch callbacks — later than DCL.)
+  await page.addInitScript(() => {
+    (window as unknown as { __obs: unknown[] }).__obs = [];
+    window.addEventListener("DOMContentLoaded", () => {
+      const el = document.getElementById("faucetRow");
+      if (!el) {
+        (window as unknown as { __obs: unknown[] }).__obs.push({ err: "no faucetRow at DCL" });
+        return;
+      }
+      new MutationObserver(() => {
+        (window as unknown as { __obs: unknown[] }).__obs.push({
+          hidden: el.hidden, t: Math.round(performance.now()),
+        });
+      }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
+    });
+  });
 
   await page.goto("/");
-  await expect(page.locator("#addr")).toContainText("0x7099", { timeout: 30_000 });
-  events.push(`visibilityState=${await page.evaluate(() => document.visibilityState)}`);
+  // Replicate app.spec's exact first two assertions (full address + price).
+  await expect(page.locator("#addr")).toHaveText(
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", { timeout: 30_000 });
+  await expect(page.locator("#stEthPrice")).not.toHaveText("—", { timeout: 30_000 });
 
-  // The app's own boot fetch result is already in `events` above; now the
-  // browser's view of /config AFTER boot, twice (cache + no-store):
-  const probe = await page.evaluate(async () => {
-    const a = await fetch("/config").then(async (r) => `${r.status}:${await r.text()}`);
-    const b = await fetch("/config", { cache: "no-store" }).then(async (r) => `${r.status}:${await r.text()}`);
-    const row = document.getElementById("faucetRow");
-    return { a, b, hidden: row?.hidden, html: row?.outerHTML.slice(0, 120) };
+  const dump = await page.evaluate(async () => {
+    const w = window as unknown as { __obs: unknown[] };
+    const res = performance.getEntriesByType("resource")
+      .filter((r) => r.name.includes("/config") || r.name.includes("/rpc"))
+      .slice(0, 8)
+      .map((r) => `${r.name.split("/").slice(-1)[0] || r.name}=${(r as PerformanceResourceTiming).responseStatus}`);
+    const cfg = await fetch("/config").then(async (r) => `${r.status}:${await r.text()}`).catch((e) => `ERR ${e}`);
+    return {
+      obs: w.__obs,
+      res,
+      cfg,
+      hidden: document.getElementById("faucetRow")?.hidden,
+      badge: document.getElementById("networkBadge")?.textContent,
+      select: (document.getElementById("networkSelect") as HTMLSelectElement)?.value,
+      visibility: document.visibilityState,
+    };
   });
-  events.push(`post-boot /config = ${probe.a}`);
-  events.push(`post-boot /config(no-store) = ${probe.b}`);
-  events.push(`faucetRow.hidden = ${probe.hidden}, html = ${probe.html}`);
+  events.push(`[obs] flips = ${JSON.stringify(dump.obs)}`);
+  events.push(`[perf] first resources = ${JSON.stringify(dump.res)}`);
+  events.push(`[cfg] now = ${dump.cfg}`);
+  events.push(`[dom] faucetRow.hidden=${dump.hidden} badge=${dump.badge} select=${dump.select} vis=${dump.visibility}`);
 
-  // Does a RELOAD (second boot) change anything? (timing race signature)
-  page.on("response", (r) => { if (r.url().includes("/config")) events.push(`reload /config -> ${r.status()}`); });
-  await page.reload();
-  await expect(page.locator("#addr")).toContainText("0x7099", { timeout: 30_000 });
-  const after = await page.evaluate(() => ({
-    hidden: document.getElementById("faucetRow")?.hidden,
-    badge: document.getElementById("networkBadge")?.textContent,
-  }));
-  events.push(`after reload: faucetRow.hidden = ${after.hidden}, badge = ${after.badge}`);
-
-  // Surface server-side rate-limit state indirectly: 130 rapid /config hits.
-  const burst = await page.evaluate(async () => {
-    const codes: Record<string, number> = {};
-    for (let i = 0; i < 130; i++) {
-      const r = await fetch("/config", { cache: "no-store" });
-      codes[r.status] = (codes[r.status] || 0) + 1;
-    }
-    return codes;
-  });
-  events.push(`burst of 130 /config -> ${JSON.stringify(burst)}`);
-
-  console.log("DIAG\n" + events.map((e) => "  " + e).join("\n") + "\nEND DIAG");
-  expect(events.length).toBeGreaterThan(0);
+  console.log("DIAG2\n" + events.map((e) => "  " + e).join("\n") + "\nEND DIAG2");
+  // No burst, no extra traffic — keep the limiter pristine for later specs.
 });
