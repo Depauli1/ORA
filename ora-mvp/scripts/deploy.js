@@ -7,6 +7,35 @@ const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 const { isProdNetwork, assertProdConfig } = require("./oracle-policy");
+const { serArgs } = require("./manifest-lib");
+
+// Artifact search shared by the ABI exporter and the verify-spec recorder.
+// Returns {file, fqn} where fqn is the hardhat-verify "path:Name" id.
+function artifactPath(name) {
+  const hits = [
+    `contracts/${name}.sol/${name}.json`,
+    `contracts/LQTY/${name}.sol/${name}.json`,
+    `contracts/TestContracts/${name}.sol/${name}.json`,
+    `contracts/branches/${name}.sol/${name}.json`,
+    `contracts/oracles/${name}.sol/${name}.json`,
+    `contracts/rates/${name}.sol/${name}.json`,
+    `contracts/rwa/${name}.sol/${name}.json`,
+    `contracts/rwa/WTBill.sol/${name}.json`,
+    `contracts/zap/${name}.sol/${name}.json`,
+    `contracts/zap/LeverZap.sol/${name}.json`,
+    `contracts/guardian/${name}.sol/${name}.json`,
+    `contracts/keeper/${name}.sol/${name}.json`
+  ];
+  for (const h of hits) {
+    const file = path.join(__dirname, "..", "artifacts", h);
+    if (fs.existsSync(file)) {
+      const noExt = h.slice(0, -".json".length);
+      const i = noExt.lastIndexOf("/");
+      return { file, fqn: noExt.slice(0, i) + ":" + noExt.slice(i + 1) };
+    }
+  }
+  throw new Error("artifact not found: " + name);
+}
 
 const { ethers, network } = hre;
 const maxBytes32 = "0x" + "f".repeat(64);
@@ -52,11 +81,29 @@ async function main() {
   const [deployer, , , , treasury] = await ethers.getSigners();
   console.log(`Network: ${network.name} | Deployer: ${deployer.address}`);
 
+  // Nonce-determinism: with a fresh deployer key the whole address map is a
+  // pure function of (deployer, nonce). Record both per deployment so
+  // check-addresses.js can re-derive every address from the manifest alone.
+  const startNonce = await ethers.provider.getTransactionCount(deployer.address, "pending");
+  if (startNonce !== 0) {
+    console.log(`  NOTE: deployer start nonce is ${startNonce} (fresh key = 0; addresses still replayable from the recorded nonces)`);
+  }
+  const verifySpecs = [];
   const deploy = async (name, ...args) => {
+    const nonce = await ethers.provider.getTransactionCount(deployer.address, "pending");
     const f = await ethers.getContractFactory(name);
     const c = await f.deploy(...args);
     await c.waitForDeployment();
-    console.log(`  ${name.padEnd(24)} ${await c.getAddress()}`);
+    const address = await c.getAddress();
+    const art = artifactPath(name);
+    const deployedBytecode = JSON.parse(fs.readFileSync(art.file)).deployedBytecode;
+    verifySpecs.push({
+      contract: name, address, nonce,
+      artifact: art.fqn,
+      args: serArgs(args),
+      bytecodeHash: ethers.keccak256(deployedBytecode)
+    });
+    console.log(`  ${name.padEnd(24)} ${address}`);
     return c;
   };
   const a = c => c.getAddress();
@@ -500,31 +547,25 @@ async function main() {
   }
 
   // ---------------- Export ----------------
-  const abi = name => {
-    const hits = [
-      `contracts/${name}.sol/${name}.json`,
-      `contracts/LQTY/${name}.sol/${name}.json`,
-      `contracts/TestContracts/${name}.sol/${name}.json`,
-      `contracts/branches/${name}.sol/${name}.json`,
-      `contracts/oracles/${name}.sol/${name}.json`,
-      `contracts/rates/${name}.sol/${name}.json`,
-      `contracts/rwa/${name}.sol/${name}.json`,
-      `contracts/rwa/WTBill.sol/${name}.json`,
-      `contracts/zap/${name}.sol/${name}.json`,
-      `contracts/zap/LeverZap.sol/${name}.json`,
-      `contracts/guardian/${name}.sol/${name}.json`,
-      `contracts/keeper/${name}.sol/${name}.json`
-    ];
-    for (const h of hits) {
-      const p = path.join(__dirname, "..", "artifacts", h);
-      if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p)).abi;
-    }
-    throw new Error("artifact not found: " + name);
-  };
+  const abi = name => JSON.parse(fs.readFileSync(artifactPath(name).file)).abi;
 
+  let gitCommit = "unknown";
+  try {
+    gitCommit = require("child_process").execSync("git rev-parse --short HEAD", { cwd: path.join(__dirname, "..") }).toString().trim();
+  } catch {}
   const out = {
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     deployer: deployer.address,
+    meta: {
+      network: network.name,
+      chainId: Number((await ethers.provider.getNetwork()).chainId),
+      deployer: deployer.address,
+      startNonce,
+      gitCommit,
+      timestamp: new Date().toISOString(),
+      determinism: "nonce-replay (fresh deployer + fixed sequence; CREATE2 unsafe here — see scripts/manifest-lib.js)"
+    },
+    verify: verifySpecs,
     shared: {
       sequencerUptimeFeed: sequencerFeedAddr,
       sequencerSettable,

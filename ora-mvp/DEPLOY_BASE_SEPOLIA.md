@@ -108,6 +108,13 @@ faucets above.
 
 Each trigger push runs a **fresh full deploy** (new addresses) and overwrites
 `deployment-baseSepolia.json`. The previous deployment keeps existing on
-chain but the app only shows the latest. Deterministic-address guarantees do
-NOT hold on public networks (nonce depends on history) — always use the
-committed deployment file, never hardcoded addresses.
+chain but the app only shows the latest. Always use the committed deployment
+file, never hardcoded addresses.
+Post-deploy pipeline (run from `ora-mvp/`, needs `BASESCAN_API_KEY`):
+`node scripts/check-addresses.js ../app/deployment-baseSepolia.json`
+re-derives every address from the recorded (deployer, nonce) pairs —
+nonce-replay determinism holds on public networks too, whatever the
+deployer history. `node scripts/diff-manifest.js <prev> <new>` produces the
+per-release address/ABI/bytecode diff for review. `npx hardhat run
+scripts/verify-deployment.js --network baseSepolia` verifies all 69
+contracts on Basescan from the manifest's constructor args.

@@ -125,10 +125,17 @@ valid under both compilers).
    no callbacks). Intentional ETH sends (swap payout, owner sweep, `exec`,
    keeper compensation forward, permissionless dust sweep) carry inline
    `slither-disable` comments with justifications.
+7. **Second analyzer (evaluated, deferred).** Aderyn was considered as a
+   complement to Slither and deliberately NOT gated in CI yet: it needs a
+   trial run on hardware with release-binary egress (sandbox-blocked here),
+   the dual-compiler (0.6.11 + 0.8.24) tree needs a scope config first, and
+   an ungated analyzer's noise has to be triaged before it can gate.
+   Recommended pre-audit step on a dev machine, then decide gate vs.
+   advisory from the finding count — not a code item.
 
 ## Verification pointers
 
-- `npm test` — 167 tests incl. fuzz + invariant-driver mirrors + 6 jsdom UI smoke tests (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations, oracle policy, keeper sharding, monitor logic)
+- `npm test` — 178 tests incl. fuzz + invariant-driver mirrors + 6 jsdom UI smoke tests + 8 deploy-pipeline checks (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations, oracle policy, keeper sharding, monitor logic)
 - `forge test` — stateful invariant campaigns (wmTBILL custody/skim, sorUSD price/backing; 256 runs × depth 24, `fail_on_revert`)
 - `scripts/watch-invariants.js` — live-deployment invariant monitor (solvency, custody, SP/vault/AMM backing, debt↔supply), 60s realtime watch + 6h CI cron backstop on Base Sepolia
 - `scripts/verify-tokenomics.js` — 47 on-chain claims (registrar renounce = prod)

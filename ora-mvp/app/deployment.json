@@ -1,16 +1,678 @@
 {
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "meta": {
+    "network": "hardhat",
+    "chainId": 31337,
+    "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "startNonce": 0,
+    "gitCommit": "aad275b",
+    "timestamp": "2026-09-25T09:51:59.035Z",
+    "determinism": "nonce-replay (fresh deployer + fixed sequence; CREATE2 unsafe here — see scripts/manifest-lib.js)"
+  },
+  "verify": [
+    {
+      "contract": "MockWstETH",
+      "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "nonce": 0,
+      "artifact": "contracts/branches/MockWstETH.sol:MockWstETH",
+      "args": [],
+      "bytecodeHash": "0x2e22b873a6adde39f1475ae2c627b3034f6d616a82a84996277057d703b4e5ff"
+    },
+    {
+      "contract": "SettableAggregator",
+      "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "nonce": 1,
+      "artifact": "contracts/oracles/SettableAggregator.sol:SettableAggregator",
+      "args": [
+        8,
+        "ETH / USD",
+        {
+          "__bigint": "200000000000"
+        }
+      ],
+      "bytecodeHash": "0xf60e0a16ade562da1071c70e4c18ebda72c95308d9272943a8fdba0e16ab8621"
+    },
+    {
+      "contract": "SettableAggregator",
+      "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "nonce": 2,
+      "artifact": "contracts/oracles/SettableAggregator.sol:SettableAggregator",
+      "args": [
+        18,
+        "stETH / ETH",
+        {
+          "__bigint": "1000000000000000000"
+        }
+      ],
+      "bytecodeHash": "0xf60e0a16ade562da1071c70e4c18ebda72c95308d9272943a8fdba0e16ab8621"
+    },
+    {
+      "contract": "SettableAggregator",
+      "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "nonce": 3,
+      "artifact": "contracts/oracles/SettableAggregator.sol:SettableAggregator",
+      "args": [
+        0,
+        "L2 Sequencer Up",
+        {
+          "__bigint": "0"
+        }
+      ],
+      "bytecodeHash": "0xf60e0a16ade562da1071c70e4c18ebda72c95308d9272943a8fdba0e16ab8621"
+    },
+    {
+      "contract": "SettableAggregator",
+      "address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "nonce": 5,
+      "artifact": "contracts/oracles/SettableAggregator.sol:SettableAggregator",
+      "args": [
+        8,
+        "ETH / USD (fallback)",
+        {
+          "__bigint": "200000000000"
+        }
+      ],
+      "bytecodeHash": "0xf60e0a16ade562da1071c70e4c18ebda72c95308d9272943a8fdba0e16ab8621"
+    },
+    {
+      "contract": "ChainlinkPriceFeed",
+      "address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "nonce": 6,
+      "artifact": "contracts/oracles/ChainlinkPriceFeed.sol:ChainlinkPriceFeed",
+      "args": [
+        "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        172800,
+        "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+        "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+        5000
+      ],
+      "bytecodeHash": "0xb391ddd9137354e01800d119a79e430523265553b39b3a7da581c0733fa353c4"
+    },
+    {
+      "contract": "WstETHPriceFeed",
+      "address": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "nonce": 7,
+      "artifact": "contracts/oracles/WstETHPriceFeed.sol:WstETHPriceFeed",
+      "args": [
+        "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        172800,
+        172800,
+        "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+        5000
+      ],
+      "bytecodeHash": "0x013fd4978a405e5b7746236f5ee59cae5be6712b784ed9a069d2e73767b90c52"
+    },
+    {
+      "contract": "MockTBill",
+      "address": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      "nonce": 8,
+      "artifact": "contracts/branches/MockTBill.sol:MockTBill",
+      "args": [],
+      "bytecodeHash": "0xf77192434a2a0b3307ee99564883fc3fc4f8829379e636345412817fc6fcbfa6"
+    },
+    {
+      "contract": "SettableAggregator",
+      "address": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "nonce": 9,
+      "artifact": "contracts/oracles/SettableAggregator.sol:SettableAggregator",
+      "args": [
+        8,
+        "mTBILL NAV / USD",
+        {
+          "__bigint": "105000000"
+        }
+      ],
+      "bytecodeHash": "0xf60e0a16ade562da1071c70e4c18ebda72c95308d9272943a8fdba0e16ab8621"
+    },
+    {
+      "contract": "RWAPriceFeed",
+      "address": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      "nonce": 10,
+      "artifact": "contracts/oracles/RWAPriceFeed.sol:RWAPriceFeed",
+      "args": [
+        "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+        259200
+      ],
+      "bytecodeHash": "0xf0b2407ea4b5a82a465026ef6d9fdbff2b7c4a6c2bf9fd374208e6a65c955e13"
+    },
+    {
+      "contract": "SortedTroves",
+      "address": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+      "nonce": 11,
+      "artifact": "contracts/SortedTroves.sol:SortedTroves",
+      "args": [],
+      "bytecodeHash": "0x894a10bb317510ab7c69329bfd75ff07c369fc25ccf7c1a8514f994057702cdc"
+    },
+    {
+      "contract": "TroveManager",
+      "address": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "nonce": 12,
+      "artifact": "contracts/TroveManager.sol:TroveManager",
+      "args": [],
+      "bytecodeHash": "0xb1e155cc31d86802e3557b860929c5bbce47391ea68f762093f39fdb71d3501e"
+    },
+    {
+      "contract": "ActivePool",
+      "address": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+      "nonce": 13,
+      "artifact": "contracts/ActivePool.sol:ActivePool",
+      "args": [],
+      "bytecodeHash": "0x0cce6fc210c838f1e48ba03e67e0a28dfe9fc2cda9a48066748ea83649c57844"
+    },
+    {
+      "contract": "StabilityPool",
+      "address": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+      "nonce": 14,
+      "artifact": "contracts/StabilityPool.sol:StabilityPool",
+      "args": [],
+      "bytecodeHash": "0xe69c880e971ebd3b454d6098404b3da320d4b77f91dcfc222567555a359df437"
+    },
+    {
+      "contract": "GasPool",
+      "address": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+      "nonce": 15,
+      "artifact": "contracts/GasPool.sol:GasPool",
+      "args": [],
+      "bytecodeHash": "0x82126c586ef8a371faa8bdd5b46f5823b1c8862ffc90ad7db867ae6595d3fb96"
+    },
+    {
+      "contract": "DefaultPool",
+      "address": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
+      "nonce": 16,
+      "artifact": "contracts/DefaultPool.sol:DefaultPool",
+      "args": [],
+      "bytecodeHash": "0x85f0e10d24b0c6ec186affd388518aa428329ed5dc3a2cb2503164a0e2ac8b1b"
+    },
+    {
+      "contract": "CollSurplusPool",
+      "address": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      "nonce": 17,
+      "artifact": "contracts/CollSurplusPool.sol:CollSurplusPool",
+      "args": [],
+      "bytecodeHash": "0x4a1a86935327d3109e3c9ebcb4c673abfc8359ce0903a568053bfb30fd5c17b9"
+    },
+    {
+      "contract": "BorrowerOperations",
+      "address": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+      "nonce": 18,
+      "artifact": "contracts/BorrowerOperations.sol:BorrowerOperations",
+      "args": [],
+      "bytecodeHash": "0xed0db1046b7c19abc791829fe0ce5739b8387870fd67280f9504c02e0d7bbf70"
+    },
+    {
+      "contract": "HintHelpers",
+      "address": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+      "nonce": 19,
+      "artifact": "contracts/HintHelpers.sol:HintHelpers",
+      "args": [],
+      "bytecodeHash": "0x7403ed3d4bcfa92c065c15098f995bfeff1a7e278d3ef7d9038d5b9b3b521978"
+    },
+    {
+      "contract": "MultiTroveGetter",
+      "address": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+      "nonce": 20,
+      "artifact": "contracts/MultiTroveGetter.sol:MultiTroveGetter",
+      "args": [
+        "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+        "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+      ],
+      "bytecodeHash": "0x7eeb69c8867bb84acc862a82235bd576ca43018df00c59eab408ce9c76860a36"
+    },
+    {
+      "contract": "LUSDToken",
+      "address": "0x59b670e9fA9D0A427751Af201D676719a970857b",
+      "nonce": 21,
+      "artifact": "contracts/LUSDToken.sol:LUSDToken",
+      "args": [
+        "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+        "0x9A676e781A523b5d0C0e43731313A708CB607508",
+        "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"
+      ],
+      "bytecodeHash": "0x34accd452c7e74763afbfe78580b8a654f42fedb7c84b01c8cd732aedc00f561"
+    },
+    {
+      "contract": "CommunityIssuance",
+      "address": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+      "nonce": 22,
+      "artifact": "contracts/LQTY/CommunityIssuance.sol:CommunityIssuance",
+      "args": [],
+      "bytecodeHash": "0x5055ac782a1bf44babf7d2a5e086b36a50cca85ecc97ceed97d1c004e8cda191"
+    },
+    {
+      "contract": "LQTYStaking",
+      "address": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+      "nonce": 23,
+      "artifact": "contracts/LQTY/LQTYStaking.sol:LQTYStaking",
+      "args": [],
+      "bytecodeHash": "0x7da4601571a4e1c8e0a3508b82ec009dca7fc5a29c07215e59882a7b69d56a57"
+    },
+    {
+      "contract": "LockupContractFactory",
+      "address": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+      "nonce": 24,
+      "artifact": "contracts/LQTY/LockupContractFactory.sol:LockupContractFactory",
+      "args": [],
+      "bytecodeHash": "0x783d7bb8d8246b353fa5cecbe6e960b5bd56bb244db21f5901a0068170a17f9e"
+    },
+    {
+      "contract": "LQTYToken",
+      "address": "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
+      "nonce": 25,
+      "artifact": "contracts/LQTY/LQTYToken.sol:LQTYToken",
+      "args": [
+        "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+        "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+        "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+        "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+        "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      ],
+      "bytecodeHash": "0xca55355028f5a6ecec69f495d723e2af76ca223752e7addbcd279d576d13fb83"
+    },
+    {
+      "contract": "OraGuardian",
+      "address": "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",
+      "nonce": 26,
+      "artifact": "contracts/guardian/OraGuardian.sol:OraGuardian",
+      "args": [
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      ],
+      "bytecodeHash": "0x622ae9032f4bd7fd176bd69fa71bc416568c4a2d595f42a97ee6995c0f687cc8"
+    },
+    {
+      "contract": "BatchLiquidator",
+      "address": "0x09635F643e140090A9A8Dcd712eD6285858ceBef",
+      "nonce": 27,
+      "artifact": "contracts/keeper/BatchLiquidator.sol:BatchLiquidator",
+      "args": [],
+      "bytecodeHash": "0x2506a5e80eee687af60727e30805f45f73793488478d71d962e342c8666dc8d2"
+    },
+    {
+      "contract": "TroveCursor",
+      "address": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+      "nonce": 28,
+      "artifact": "contracts/keeper/TroveCursor.sol:TroveCursor",
+      "args": [],
+      "bytecodeHash": "0x7f7ea91c48ba9d5d28b3047d7a13873d40c6e876fff703c37a30950bad257b9f"
+    },
+    {
+      "contract": "SortedTroves",
+      "address": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+      "nonce": 41,
+      "artifact": "contracts/SortedTroves.sol:SortedTroves",
+      "args": [],
+      "bytecodeHash": "0x894a10bb317510ab7c69329bfd75ff07c369fc25ccf7c1a8514f994057702cdc"
+    },
+    {
+      "contract": "TroveManagerV2",
+      "address": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+      "nonce": 42,
+      "artifact": "contracts/branches/TroveManagerV2.sol:TroveManagerV2",
+      "args": [],
+      "bytecodeHash": "0x0a286ebc53a54ca537e4fd961ef672ea0456f0679c352aec15a5bfdb72c48b3b"
+    },
+    {
+      "contract": "ActivePoolERC20",
+      "address": "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
+      "nonce": 43,
+      "artifact": "contracts/branches/ActivePoolERC20.sol:ActivePoolERC20",
+      "args": [],
+      "bytecodeHash": "0xf40e25a68501d8da29f143c11eb4e7eda96786490f8d0908e7a4d3f6290c179a"
+    },
+    {
+      "contract": "StabilityPoolERC20",
+      "address": "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
+      "nonce": 44,
+      "artifact": "contracts/branches/StabilityPoolERC20.sol:StabilityPoolERC20",
+      "args": [],
+      "bytecodeHash": "0xb2b05c4d9660796d3cb1eb9299dff4ba0301b26018634be85abb699d0c613b5a"
+    },
+    {
+      "contract": "GasPool",
+      "address": "0x9d4454B023096f34B160D6B654540c56A1F81688",
+      "nonce": 45,
+      "artifact": "contracts/GasPool.sol:GasPool",
+      "args": [],
+      "bytecodeHash": "0x82126c586ef8a371faa8bdd5b46f5823b1c8862ffc90ad7db867ae6595d3fb96"
+    },
+    {
+      "contract": "DefaultPoolERC20",
+      "address": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00",
+      "nonce": 46,
+      "artifact": "contracts/branches/DefaultPoolERC20.sol:DefaultPoolERC20",
+      "args": [],
+      "bytecodeHash": "0x4e7e635038e035a0c996510c8ea8702b88ba647fec71df34e21abaca20a40344"
+    },
+    {
+      "contract": "CollSurplusPoolERC20",
+      "address": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
+      "nonce": 47,
+      "artifact": "contracts/branches/CollSurplusPoolERC20.sol:CollSurplusPoolERC20",
+      "args": [],
+      "bytecodeHash": "0xf9d64eff4ce9dba4dbc162d6b1964c121f3b15e344c0f48ce581995c20c560dd"
+    },
+    {
+      "contract": "BorrowerOperationsERC20",
+      "address": "0x809d550fca64d94Bd9F66E60752A544199cfAC3D",
+      "nonce": 48,
+      "artifact": "contracts/branches/BorrowerOperationsERC20.sol:BorrowerOperationsERC20",
+      "args": [],
+      "bytecodeHash": "0x7b121ec1456e3a4865ec38936f029c7259bd877dd0fc0a4fc60759df0f1a8190"
+    },
+    {
+      "contract": "HintHelpers",
+      "address": "0x4c5859f0F772848b2D91F1D83E2Fe57935348029",
+      "nonce": 49,
+      "artifact": "contracts/HintHelpers.sol:HintHelpers",
+      "args": [],
+      "bytecodeHash": "0x7403ed3d4bcfa92c065c15098f995bfeff1a7e278d3ef7d9038d5b9b3b521978"
+    },
+    {
+      "contract": "MultiTroveGetter",
+      "address": "0x1291Be112d480055DaFd8a610b7d1e203891C274",
+      "nonce": 50,
+      "artifact": "contracts/MultiTroveGetter.sol:MultiTroveGetter",
+      "args": [
+        "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+        "0x4826533B4897376654Bb4d4AD88B7faFD0C98528"
+      ],
+      "bytecodeHash": "0x7eeb69c8867bb84acc862a82235bd576ca43018df00c59eab408ce9c76860a36"
+    },
+    {
+      "contract": "BranchStaking",
+      "address": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154",
+      "nonce": 51,
+      "artifact": "contracts/branches/BranchStaking.sol:BranchStaking",
+      "args": [],
+      "bytecodeHash": "0xfb4a1cb6ce444c89a3a6f10191fd72c97ba29599465bae80bc3c7b3a93d844fa"
+    },
+    {
+      "contract": "BranchCommunityIssuance",
+      "address": "0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575",
+      "nonce": 52,
+      "artifact": "contracts/branches/BranchCommunityIssuance.sol:BranchCommunityIssuance",
+      "args": [],
+      "bytecodeHash": "0x22b6c067081f1022401b60ec936abb1aeba7c83d449d5f398456f732b430e6fd"
+    },
+    {
+      "contract": "WTBill",
+      "address": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
+      "nonce": 70,
+      "artifact": "contracts/rwa/WTBill.sol:WTBill",
+      "args": [
+        "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+        "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
+      ],
+      "bytecodeHash": "0x651e1dc96df9d4017fb5a0d747464c99b442bd9418cdfd06be8146bc96ebe35e"
+    },
+    {
+      "contract": "WTBillPriceFeed",
+      "address": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
+      "nonce": 71,
+      "artifact": "contracts/rwa/WTBillPriceFeed.sol:WTBillPriceFeed",
+      "args": [
+        "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+        "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823"
+      ],
+      "bytecodeHash": "0x555b88f560cbacee21eddd38b0a94e177561e54fee9ffe51e8ba22b12d1018a3"
+    },
+    {
+      "contract": "SortedTroves",
+      "address": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
+      "nonce": 72,
+      "artifact": "contracts/SortedTroves.sol:SortedTroves",
+      "args": [],
+      "bytecodeHash": "0x894a10bb317510ab7c69329bfd75ff07c369fc25ccf7c1a8514f994057702cdc"
+    },
+    {
+      "contract": "TroveManagerRWA",
+      "address": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+      "nonce": 73,
+      "artifact": "contracts/rwa/TroveManagerRWA.sol:TroveManagerRWA",
+      "args": [],
+      "bytecodeHash": "0xfe44affe2399637a22b560fbd3296966b036d7ba261f83da980763c39eddce1a"
+    },
+    {
+      "contract": "ActivePoolERC20",
+      "address": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+      "nonce": 74,
+      "artifact": "contracts/branches/ActivePoolERC20.sol:ActivePoolERC20",
+      "args": [],
+      "bytecodeHash": "0xf40e25a68501d8da29f143c11eb4e7eda96786490f8d0908e7a4d3f6290c179a"
+    },
+    {
+      "contract": "StabilityPoolRWA",
+      "address": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
+      "nonce": 75,
+      "artifact": "contracts/rwa/StabilityPoolRWA.sol:StabilityPoolRWA",
+      "args": [],
+      "bytecodeHash": "0x8f014be98421ecacc18be29bfb4cc405aa325dd61565c3203596b7872fab8846"
+    },
+    {
+      "contract": "GasPool",
+      "address": "0x8198f5d8F8CfFE8f9C413d98a0A55aEB8ab9FbB7",
+      "nonce": 76,
+      "artifact": "contracts/GasPool.sol:GasPool",
+      "args": [],
+      "bytecodeHash": "0x82126c586ef8a371faa8bdd5b46f5823b1c8862ffc90ad7db867ae6595d3fb96"
+    },
+    {
+      "contract": "DefaultPoolERC20",
+      "address": "0x0355B7B8cb128fA5692729Ab3AAa199C1753f726",
+      "nonce": 77,
+      "artifact": "contracts/branches/DefaultPoolERC20.sol:DefaultPoolERC20",
+      "args": [],
+      "bytecodeHash": "0x4e7e635038e035a0c996510c8ea8702b88ba647fec71df34e21abaca20a40344"
+    },
+    {
+      "contract": "CollSurplusPoolERC20",
+      "address": "0x202CCe504e04bEd6fC0521238dDf04Bc9E8E15aB",
+      "nonce": 78,
+      "artifact": "contracts/branches/CollSurplusPoolERC20.sol:CollSurplusPoolERC20",
+      "args": [],
+      "bytecodeHash": "0xf9d64eff4ce9dba4dbc162d6b1964c121f3b15e344c0f48ce581995c20c560dd"
+    },
+    {
+      "contract": "BorrowerOperationsRWA",
+      "address": "0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8",
+      "nonce": 79,
+      "artifact": "contracts/rwa/BorrowerOperationsRWA.sol:BorrowerOperationsRWA",
+      "args": [],
+      "bytecodeHash": "0xc90a00d6096861e65359e32d31268e604f64a234aea86f15304eaaabfc7fe0b3"
+    },
+    {
+      "contract": "HintHelpersRWA",
+      "address": "0x172076E0166D1F9Cc711C77Adf8488051744980C",
+      "nonce": 80,
+      "artifact": "contracts/rwa/HintHelpersRWA.sol:HintHelpersRWA",
+      "args": [],
+      "bytecodeHash": "0xd7e417ebec11baa550eb83f5b39595e5c8dafee23206d69d03c8688cfecf8219"
+    },
+    {
+      "contract": "MultiTroveGetter",
+      "address": "0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B",
+      "nonce": 81,
+      "artifact": "contracts/MultiTroveGetter.sol:MultiTroveGetter",
+      "args": [
+        "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+        "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43"
+      ],
+      "bytecodeHash": "0x7eeb69c8867bb84acc862a82235bd576ca43018df00c59eab408ce9c76860a36"
+    },
+    {
+      "contract": "BranchStaking",
+      "address": "0xBEc49fA140aCaA83533fB00A2BB19bDdd0290f25",
+      "nonce": 82,
+      "artifact": "contracts/branches/BranchStaking.sol:BranchStaking",
+      "args": [],
+      "bytecodeHash": "0xfb4a1cb6ce444c89a3a6f10191fd72c97ba29599465bae80bc3c7b3a93d844fa"
+    },
+    {
+      "contract": "BranchCommunityIssuance",
+      "address": "0xD84379CEae14AA33C123Af12424A37803F885889",
+      "nonce": 83,
+      "artifact": "contracts/branches/BranchCommunityIssuance.sol:BranchCommunityIssuance",
+      "args": [],
+      "bytecodeHash": "0x22b6c067081f1022401b60ec936abb1aeba7c83d449d5f398456f732b430e6fd"
+    },
+    {
+      "contract": "SortedTrovesRates",
+      "address": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629",
+      "nonce": 102,
+      "artifact": "contracts/rates/SortedTrovesRates.sol:SortedTrovesRates",
+      "args": [],
+      "bytecodeHash": "0x5fee5da2b576c02d43ca9ca01866c4be365552e04758e02f976a6f7504c553be"
+    },
+    {
+      "contract": "TroveManagerRates",
+      "address": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
+      "nonce": 103,
+      "artifact": "contracts/rates/TroveManagerRates.sol:TroveManagerRates",
+      "args": [],
+      "bytecodeHash": "0xbbbf7ca7268f3197ab7dd2dd3ca56642005d44a88ac1b747be7ce4a7ed654af0"
+    },
+    {
+      "contract": "ActivePool",
+      "address": "0xCace1b78160AE76398F486c8a18044da0d66d86D",
+      "nonce": 104,
+      "artifact": "contracts/ActivePool.sol:ActivePool",
+      "args": [],
+      "bytecodeHash": "0x0cce6fc210c838f1e48ba03e67e0a28dfe9fc2cda9a48066748ea83649c57844"
+    },
+    {
+      "contract": "StabilityPoolRates",
+      "address": "0xD5ac451B0c50B9476107823Af206eD814a2e2580",
+      "nonce": 105,
+      "artifact": "contracts/rates/StabilityPoolRates.sol:StabilityPoolRates",
+      "args": [],
+      "bytecodeHash": "0xf7865fb25aa2461b90d749e55212597793c3bf6fb970bc98b78b11259f3c7724"
+    },
+    {
+      "contract": "GasPool",
+      "address": "0xF8e31cb472bc70500f08Cd84917E5A1912Ec8397",
+      "nonce": 106,
+      "artifact": "contracts/GasPool.sol:GasPool",
+      "args": [],
+      "bytecodeHash": "0x82126c586ef8a371faa8bdd5b46f5823b1c8862ffc90ad7db867ae6595d3fb96"
+    },
+    {
+      "contract": "DefaultPool",
+      "address": "0xc0F115A19107322cFBf1cDBC7ea011C19EbDB4F8",
+      "nonce": 107,
+      "artifact": "contracts/DefaultPool.sol:DefaultPool",
+      "args": [],
+      "bytecodeHash": "0x85f0e10d24b0c6ec186affd388518aa428329ed5dc3a2cb2503164a0e2ac8b1b"
+    },
+    {
+      "contract": "CollSurplusPool",
+      "address": "0xc96304e3c037f81dA488ed9dEa1D8F2a48278a75",
+      "nonce": 108,
+      "artifact": "contracts/CollSurplusPool.sol:CollSurplusPool",
+      "args": [],
+      "bytecodeHash": "0x4a1a86935327d3109e3c9ebcb4c673abfc8359ce0903a568053bfb30fd5c17b9"
+    },
+    {
+      "contract": "BorrowerOperationsRates",
+      "address": "0x34B40BA116d5Dec75548a9e9A8f15411461E8c70",
+      "nonce": 109,
+      "artifact": "contracts/rates/BorrowerOperationsRates.sol:BorrowerOperationsRates",
+      "args": [],
+      "bytecodeHash": "0x95906e8627fa1392bdff38039ac5e4c31c9724234ae5be444c4d5a3e91ecc98d"
+    },
+    {
+      "contract": "HintHelpersRates",
+      "address": "0xD0141E899a65C95a556fE2B27e5982A6DE7fDD7A",
+      "nonce": 110,
+      "artifact": "contracts/rates/HintHelpersRates.sol:HintHelpersRates",
+      "args": [
+        "0x4b6aB5F819A515382B0dEB6935D793817bB4af28"
+      ],
+      "bytecodeHash": "0x2d2bbe6d617f026ede289184b8386d1748ef285c097a284cee68adc3ff2d10ec"
+    },
+    {
+      "contract": "MultiTroveGetter",
+      "address": "0x07882Ae1ecB7429a84f1D53048d35c4bB2056877",
+      "nonce": 111,
+      "artifact": "contracts/MultiTroveGetter.sol:MultiTroveGetter",
+      "args": [
+        "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
+        "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629"
+      ],
+      "bytecodeHash": "0x7eeb69c8867bb84acc862a82235bd576ca43018df00c59eab408ce9c76860a36"
+    },
+    {
+      "contract": "BranchCommunityIssuance",
+      "address": "0x22753E4264FDDc6181dc7cce468904A80a363E44",
+      "nonce": 112,
+      "artifact": "contracts/branches/BranchCommunityIssuance.sol:BranchCommunityIssuance",
+      "args": [],
+      "bytecodeHash": "0x22b6c067081f1022401b60ec936abb1aeba7c83d449d5f398456f732b430e6fd"
+    },
+    {
+      "contract": "InterestRouter",
+      "address": "0xA7c59f010700930003b33aB25a7a0679C860f29c",
+      "nonce": 113,
+      "artifact": "contracts/rates/InterestRouter.sol:InterestRouter",
+      "args": [],
+      "bytecodeHash": "0xbe2612cf9de58aa52f84d887e3939311c8cd58f821b802908b9df5f7a9cf4c7e"
+    },
+    {
+      "contract": "SorUSDVault",
+      "address": "0xfaAddC93baf78e89DCf37bA67943E1bE8F37Bb8c",
+      "nonce": 114,
+      "artifact": "contracts/rates/SorUSDVault.sol:SorUSDVault",
+      "args": [
+        "0x59b670e9fA9D0A427751Af201D676719a970857b"
+      ],
+      "bytecodeHash": "0x5836ac2eccefff0f9229943897e3e8cb7eddc3d8a221c585f1f4b19bd677788c"
+    },
+    {
+      "contract": "OraSwapPool",
+      "address": "0xB82008565FdC7e44609fA118A4a681E92581e680",
+      "nonce": 128,
+      "artifact": "contracts/zap/OraSwapPool.sol:OraSwapPool",
+      "args": [
+        "0x59b670e9fA9D0A427751Af201D676719a970857b"
+      ],
+      "bytecodeHash": "0x59fff29f0662cfc2dde54042cb4a7634996f5a78befddef9440e3d6f0514ffa4"
+    },
+    {
+      "contract": "LeverZapFactory",
+      "address": "0x2a810409872AfC346F9B5b26571Fd6eC42EA4849",
+      "nonce": 129,
+      "artifact": "contracts/zap/LeverZap.sol:LeverZapFactory",
+      "args": [
+        "0x34B40BA116d5Dec75548a9e9A8f15411461E8c70",
+        "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
+        "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+        "0xB82008565FdC7e44609fA118A4a681E92581e680",
+        "0x59b670e9fA9D0A427751Af201D676719a970857b"
+      ],
+      "bytecodeHash": "0xe4312928553404f18a8e2f2b8c387c4e0eb4df574eef1040d71d4014837bfeaf"
+    }
+  ],
   "shared": {
     "sequencerUptimeFeed": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     "sequencerSettable": true,
     "ethUsdFallbackAggregator": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
     "ethUsdFallbackSettable": true,
+    "ethUsdDeviationBps": 5000,
+    "wstethDeviationBps": 5000,
+    "ethUsdHeartbeat": 172800,
+    "stethHeartbeat": 172800,
+    "prodPolicyEnforced": false,
     "orUSDToken": "0x59b670e9fA9D0A427751Af201D676719a970857b",
     "oraToken": "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
     "oraStaking": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
     "communityIssuance": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
-    "lockupFactory": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f"
+    "lockupFactory": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+    "guardian": "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",
+    "guardianHolder": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "batchLiquidator": "0x09635F643e140090A9A8Dcd712eD6285858ceBef",
+    "troveCursor": "0xc5a5C42992dECbae36851359345FE25997F5C42d"
   },
   "branches": {
     "ETH": {
@@ -44,18 +706,18 @@
       "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "ethUsdSettable": true,
       "stEthEthAggregator": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "sortedTroves": "0xf5059a5D33d5853360D16C683c16e67980206f36",
-      "troveManager": "0x95401dc811bb5740090279Ba06cfA8fcF6113778",
-      "activePool": "0x998abeb3E57409262aE5b751f60747921B33613E",
-      "stabilityPool": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
-      "gasPool": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
-      "defaultPool": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
-      "collSurplusPool": "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
-      "borrowerOperations": "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
-      "hintHelpers": "0x9d4454B023096f34B160D6B654540c56A1F81688",
-      "multiTroveGetter": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00",
-      "branchStaking": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
-      "communityIssuance": "0x809d550fca64d94Bd9F66E60752A544199cfAC3D",
+      "sortedTroves": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+      "troveManager": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+      "activePool": "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
+      "stabilityPool": "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf",
+      "gasPool": "0x9d4454B023096f34B160D6B654540c56A1F81688",
+      "defaultPool": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00",
+      "collSurplusPool": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
+      "borrowerOperations": "0x809d550fca64d94Bd9F66E60752A544199cfAC3D",
+      "hintHelpers": "0x4c5859f0F772848b2D91F1D83E2Fe57935348029",
+      "multiTroveGetter": "0x1291Be112d480055DaFd8a610b7d1e203891C274",
+      "branchStaking": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154",
+      "communityIssuance": "0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575",
       "faucetAmount": "10"
     },
     "tBILL": {
@@ -65,25 +727,25 @@
       "mcr": 1.05,
       "ccr": 1.15,
       "softFloor": 1.03,
-      "collToken": "0x5081a39b8A5f0E35a8D959395a630b68B74Dd30f",
+      "collToken": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
       "underlyingToken": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
       "underlyingSymbol": "mTBILL",
       "skimRatePerYear": 0.02,
-      "priceFeed": "0x1fA02b2d6A771842690194Cf62D91bdd92BfE28d",
+      "priceFeed": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
       "navPriceFeed": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
       "navAggregator": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-      "sortedTroves": "0xdbC43Ba45381e02825b14322cDdd15eC4B3164E6",
-      "troveManager": "0x04C89607413713Ec9775E14b954286519d836FEf",
-      "activePool": "0x4C4a2f8c81640e47606d3fd77B353E87Ba015584",
-      "stabilityPool": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
-      "gasPool": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
-      "defaultPool": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
-      "collSurplusPool": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
-      "borrowerOperations": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
-      "hintHelpers": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
-      "multiTroveGetter": "0x8198f5d8F8CfFE8f9C413d98a0A55aEB8ab9FbB7",
-      "branchStaking": "0x0355B7B8cb128fA5692729Ab3AAa199C1753f726",
-      "communityIssuance": "0x202CCe504e04bEd6fC0521238dDf04Bc9E8E15aB",
+      "sortedTroves": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
+      "troveManager": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+      "activePool": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+      "stabilityPool": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB",
+      "gasPool": "0x8198f5d8F8CfFE8f9C413d98a0A55aEB8ab9FbB7",
+      "defaultPool": "0x0355B7B8cb128fA5692729Ab3AAa199C1753f726",
+      "collSurplusPool": "0x202CCe504e04bEd6fC0521238dDf04Bc9E8E15aB",
+      "borrowerOperations": "0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8",
+      "hintHelpers": "0x172076E0166D1F9Cc711C77Adf8488051744980C",
+      "multiTroveGetter": "0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B",
+      "branchStaking": "0xBEc49fA140aCaA83533fB00A2BB19bDdd0290f25",
+      "communityIssuance": "0xD84379CEae14AA33C123Af12424A37803F885889",
       "debtCap": "2000000",
       "faucetAmount": "10000"
     },
@@ -97,21 +759,21 @@
       "priceFeed": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
       "ethUsdAggregator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "ethUsdSettable": true,
-      "sortedTroves": "0xf953b3A269d80e3eB0F2947630Da976B896A8C5b",
-      "troveManager": "0xAA292E8611aDF267e563f334Ee42320aC96D0463",
-      "activePool": "0x5c74c94173F05dA1720953407cbb920F3DF9f887",
-      "stabilityPool": "0x720472c8ce72c2A2D711333e064ABD3E6BbEAdd3",
-      "gasPool": "0xe8D2A1E88c91DCd5433208d4152Cc4F399a7e91d",
-      "defaultPool": "0x5067457698Fd6Fa1C6964e416b3f42713513B3dD",
-      "collSurplusPool": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629",
-      "borrowerOperations": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
-      "hintHelpers": "0xCace1b78160AE76398F486c8a18044da0d66d86D",
-      "multiTroveGetter": "0xD5ac451B0c50B9476107823Af206eD814a2e2580",
-      "communityIssuance": "0xF8e31cb472bc70500f08Cd84917E5A1912Ec8397",
-      "interestRouter": "0xc0F115A19107322cFBf1cDBC7ea011C19EbDB4F8",
-      "sorUSDVault": "0xc96304e3c037f81dA488ed9dEa1D8F2a48278a75",
-      "swapPool": "0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926",
-      "leverZapFactory": "0xE3011A37A904aB90C8881a99BD1F6E21401f1522"
+      "sortedTroves": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629",
+      "troveManager": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28",
+      "activePool": "0xCace1b78160AE76398F486c8a18044da0d66d86D",
+      "stabilityPool": "0xD5ac451B0c50B9476107823Af206eD814a2e2580",
+      "gasPool": "0xF8e31cb472bc70500f08Cd84917E5A1912Ec8397",
+      "defaultPool": "0xc0F115A19107322cFBf1cDBC7ea011C19EbDB4F8",
+      "collSurplusPool": "0xc96304e3c037f81dA488ed9dEa1D8F2a48278a75",
+      "borrowerOperations": "0x34B40BA116d5Dec75548a9e9A8f15411461E8c70",
+      "hintHelpers": "0xD0141E899a65C95a556fE2B27e5982A6DE7fDD7A",
+      "multiTroveGetter": "0x07882Ae1ecB7429a84f1D53048d35c4bB2056877",
+      "communityIssuance": "0x22753E4264FDDc6181dc7cce468904A80a363E44",
+      "interestRouter": "0xA7c59f010700930003b33aB25a7a0679C860f29c",
+      "sorUSDVault": "0xfaAddC93baf78e89DCf37bA67943E1bE8F37Bb8c",
+      "swapPool": "0xB82008565FdC7e44609fA118A4a681E92581e680",
+      "leverZapFactory": "0x2a810409872AfC346F9B5b26571Fd6eC42EA4849"
     }
   },
   "abis": {
@@ -3097,6 +3759,19 @@
       },
       {
         "inputs": [],
+        "name": "guardian",
+        "outputs": [
+          {
+            "internalType": "contract IOraGuardian",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "isOwner",
         "outputs": [
           {
@@ -3301,6 +3976,19 @@
           }
         ],
         "name": "setAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_guardian",
+            "type": "address"
+          }
+        ],
+        "name": "setGuardian",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -3904,6 +4592,19 @@
       },
       {
         "inputs": [],
+        "name": "guardian",
+        "outputs": [
+          {
+            "internalType": "contract IOraGuardian",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "isOwner",
         "outputs": [
           {
@@ -4144,6 +4845,19 @@
           }
         ],
         "name": "setDebtCap",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_guardian",
+            "type": "address"
+          }
+        ],
+        "name": "setGuardian",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -12276,19 +12990,6 @@
       },
       {
         "inputs": [],
-        "name": "DECIMAL_PRECISION",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
         "name": "F_ETH",
         "outputs": [
           {
@@ -12447,7 +13148,7 @@
         "name": "lqtyToken",
         "outputs": [
           {
-            "internalType": "contract ILQTYToken",
+            "internalType": "contract IERC20",
             "name": "",
             "type": "address"
           }
@@ -12460,7 +13161,7 @@
         "name": "lusdToken",
         "outputs": [
           {
-            "internalType": "contract ILUSDToken",
+            "internalType": "contract IERC20",
             "name": "",
             "type": "address"
           }
@@ -12668,19 +13369,6 @@
         ],
         "name": "TotalORAIssuedUpdated",
         "type": "event"
-      },
-      {
-        "inputs": [],
-        "name": "DECIMAL_PRECISION",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
       },
       {
         "inputs": [],
@@ -15366,6 +16054,19 @@
       },
       {
         "inputs": [],
+        "name": "guardian",
+        "outputs": [
+          {
+            "internalType": "contract IOraGuardian",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "isOwner",
         "outputs": [
           {
@@ -15598,6 +16299,19 @@
           }
         ],
         "name": "setAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_guardian",
+            "type": "address"
+          }
+        ],
+        "name": "setGuardian",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -19845,6 +20559,19 @@
       },
       {
         "inputs": [],
+        "name": "guardian",
+        "outputs": [
+          {
+            "internalType": "contract IOraGuardian",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
         "name": "isOwner",
         "outputs": [
           {
@@ -20085,6 +20812,19 @@
           }
         ],
         "name": "setDebtCap",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_guardian",
+            "type": "address"
+          }
+        ],
+        "name": "setGuardian",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -22665,6 +23405,354 @@
             "internalType": "address",
             "name": "",
             "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "guardian": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_guardian",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "borrowerOps",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "expiry",
+            "type": "uint256"
+          }
+        ],
+        "name": "BorrowingPaused",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "borrowerOps",
+            "type": "address"
+          }
+        ],
+        "name": "BorrowingUnpaused",
+        "type": "event"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "oldGuardian",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newGuardian",
+            "type": "address"
+          }
+        ],
+        "name": "GuardianUpdated",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "MAX_PAUSE_DURATION",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "borrowingPauseExpiry",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "guardian",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_borrowerOps",
+            "type": "address"
+          }
+        ],
+        "name": "isBorrowingPaused",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_borrowerOps",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_duration",
+            "type": "uint256"
+          }
+        ],
+        "name": "pauseBorrowing",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_newGuardian",
+            "type": "address"
+          }
+        ],
+        "name": "setGuardian",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_borrowerOps",
+            "type": "address"
+          }
+        ],
+        "name": "unpauseBorrowing",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ],
+    "batchLiquidator": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "troveManager",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "borrower",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "bool",
+            "name": "success",
+            "type": "bool"
+          }
+        ],
+        "name": "TroveLiquidationAttempted",
+        "type": "event"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_tm",
+            "type": "address"
+          },
+          {
+            "internalType": "address[]",
+            "name": "_troves",
+            "type": "address[]"
+          },
+          {
+            "internalType": "address",
+            "name": "_orUSD",
+            "type": "address"
+          }
+        ],
+        "name": "batchLiquidateTroves",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_tm",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_sortedTroves",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_n",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "_orUSD",
+            "type": "address"
+          }
+        ],
+        "name": "liquidateTroves",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address payable",
+            "name": "_to",
+            "type": "address"
+          }
+        ],
+        "name": "sweepETH",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_token",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_to",
+            "type": "address"
+          }
+        ],
+        "name": "sweepToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "stateMutability": "payable",
+        "type": "receive"
+      }
+    ],
+    "troveCursor": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_tm",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_sorted",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "_cursor",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "_count",
+            "type": "uint256"
+          }
+        ],
+        "name": "scan",
+        "outputs": [
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "owner",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "debt",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "coll",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct TroveCursor.Row[]",
+            "name": "rows",
+            "type": "tuple[]"
+          },
+          {
+            "internalType": "address",
+            "name": "nextCursor",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "size",
+            "type": "uint256"
           }
         ],
         "stateMutability": "view",

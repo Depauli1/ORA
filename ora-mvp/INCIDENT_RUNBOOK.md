@@ -105,7 +105,14 @@ with 0 < duration ≤ 30 days. Pausing blocks `openTrove` and debt-increasing
 `adjustTrove`; repays, collateral top-ups, closes, liquidations, redemptions,
 and SP flows all continue. Every pause auto-expires; the branch contracts can
 never be re-pointed at a new guardian (one-shot wiring), but the holder can
-rotate itself (`transferHolder`, two-step via `pendingHolder`).
+rotate itself (`setGuardian`, immediate — have the replacement Safe ready
+before executing).
+**Multisig ceremony**: build the bundle offline, import into the Safe UI
+(Transaction Builder), collect threshold signatures, execute:
+`node scripts/safe-batch.js app/deployment-baseSepolia.json --pause ETH --duration 86400 --out pause-eth.json`
+(`--unpause B`, `--rotate 0x…` for the other powers; duration clamps to
+30 days). Verify `to` equals `shared.guardian` in the manifest before
+signing — the bundle prints it.
 
 **When to pause**: an oracle attack in progress (borrowing against a
 manipulated price), a collateral-wrapper impairment (S6), or any live
