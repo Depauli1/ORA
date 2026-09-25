@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/IERC20.sol";
-import "../Dependencies/LiquityMath.sol";
-import "../Dependencies/Ownable.sol";
-import "../Dependencies/CheckContract.sol";
-import "../Dependencies/BaseMath.sol";
-import "../Dependencies/SafeMath.sol";
+import "../dependencies08/IERC20.sol";
+import "../dependencies08/OraMath.sol";
+import "../dependencies08/OraOwnable.sol";
+import "../dependencies08/OraCheckContract.sol";
 
 /*
  * ORA Phase 2 — per-branch ORA issuance for secondary Stability Pools.
@@ -18,24 +16,22 @@ import "../Dependencies/SafeMath.sol";
  * the primary ETH-branch pool). Function names keep ICommunityIssuance
  * selectors so StabilityPoolERC20 calls it unmodified.
  */
-contract BranchCommunityIssuance is Ownable, CheckContract, BaseMath {
-    using SafeMath for uint;
-
+contract BranchCommunityIssuance is OraOwnable, OraCheckContract {
     string constant public NAME = "BranchCommunityIssuance";
 
-    uint constant public SECONDS_IN_ONE_MINUTE = 60;
-    uint constant public ISSUANCE_FACTOR = 999998681227695000; // 50% issued after 1 year
+    uint256 constant public SECONDS_IN_ONE_MINUTE = 60;
+    uint256 constant public ISSUANCE_FACTOR = 999998681227695000; // 50% issued after 1 year
 
     IERC20 public oraToken;
     address public stabilityPoolAddress;
 
-    uint public supplyCap;       // fixed at activation from the funded balance
-    uint public totalORAIssued;
-    uint public deploymentTime;
+    uint256 public supplyCap;       // fixed at activation from the funded balance
+    uint256 public totalORAIssued;
+    uint256 public deploymentTime;
     bool public active;
 
-    event TotalORAIssuedUpdated(uint _totalORAIssued);
-    event IssuanceActivated(uint _supplyCap);
+    event TotalORAIssuedUpdated(uint256 _totalORAIssued);
+    event IssuanceActivated(uint256 _supplyCap);
 
     function setAddresses(address _oraTokenAddress, address _stabilityPoolAddress) external onlyOwner {
         checkContract(_oraTokenAddress);
@@ -47,7 +43,7 @@ contract BranchCommunityIssuance is Ownable, CheckContract, BaseMath {
     // Fund this contract with ORA first; activation locks the cap and starts the curve.
     function activate() external onlyOwner {
         require(!active, "BranchCommunityIssuance: already active");
-        uint balance = oraToken.balanceOf(address(this));
+        uint256 balance = oraToken.balanceOf(address(this));
         require(balance > 0, "BranchCommunityIssuance: fund with ORA before activating");
         supplyCap = balance;
         deploymentTime = block.timestamp;
@@ -57,12 +53,12 @@ contract BranchCommunityIssuance is Ownable, CheckContract, BaseMath {
     }
 
     // Selector-compatible with ICommunityIssuance.issueLQTY (issues ORA).
-    function issueLQTY() external returns (uint) {
+    function issueLQTY() external returns (uint256) {
         _requireCallerIsStabilityPool();
         if (!active) { return 0; }
 
-        uint latestTotalIssued = supplyCap.mul(_getCumulativeIssuanceFraction()).div(DECIMAL_PRECISION);
-        uint issuance = latestTotalIssued.sub(totalORAIssued);
+        uint256 latestTotalIssued = supplyCap * _getCumulativeIssuanceFraction() / OraMath.DECIMAL_PRECISION;
+        uint256 issuance = latestTotalIssued - totalORAIssued;
 
         totalORAIssued = latestTotalIssued;
         emit TotalORAIssuedUpdated(latestTotalIssued);
@@ -70,18 +66,18 @@ contract BranchCommunityIssuance is Ownable, CheckContract, BaseMath {
     }
 
     // Selector-compatible with ICommunityIssuance.sendLQTY (sends ORA).
-    function sendLQTY(address _account, uint _amount) external {
+    function sendLQTY(address _account, uint256 _amount) external {
         _requireCallerIsStabilityPool();
         if (_amount > 0) {
             require(oraToken.transfer(_account, _amount), "BranchCommunityIssuance: ORA transfer failed");
         }
     }
 
-    function _getCumulativeIssuanceFraction() internal view returns (uint) {
-        uint timePassedInMinutes = block.timestamp.sub(deploymentTime).div(SECONDS_IN_ONE_MINUTE);
-        uint power = LiquityMath._decPow(ISSUANCE_FACTOR, timePassedInMinutes);
-        uint cumulativeIssuanceFraction = (uint(DECIMAL_PRECISION).sub(power));
-        assert(cumulativeIssuanceFraction <= DECIMAL_PRECISION);
+    function _getCumulativeIssuanceFraction() internal view returns (uint256) {
+        uint256 timePassedInMinutes = (block.timestamp - deploymentTime) / SECONDS_IN_ONE_MINUTE;
+        uint256 power = OraMath._decPow(ISSUANCE_FACTOR, timePassedInMinutes);
+        uint256 cumulativeIssuanceFraction = OraMath.DECIMAL_PRECISION - power;
+        assert(cumulativeIssuanceFraction <= OraMath.DECIMAL_PRECISION);
         return cumulativeIssuanceFraction;
     }
 

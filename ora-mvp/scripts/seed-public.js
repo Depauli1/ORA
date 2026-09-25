@@ -114,6 +114,7 @@ async function main() {
 
   await section("demo AMM liquidity (orUSD/ETH)", async () => {
     const B = dep.branches.ETHv2;
+    if (!B.swapPool) { console.log("[ETHv2] no demo AMM on this chain — skipping pool seed"); return; }
     const pool = await ethers.getContractAt("OraSwapPool", B.swapPool);
     if ((await pool.reserveETH()) > 0n) throw new Error("already seeded");
     const ethIn = E("0.02");

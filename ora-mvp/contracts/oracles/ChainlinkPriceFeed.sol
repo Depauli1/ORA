@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Interfaces/IPriceFeed.sol";
-import "../Dependencies/AggregatorV3Interface.sol";
-import "../Dependencies/CheckContract.sol";
+import "../dependencies08/IPriceFeed.sol";
+import "../dependencies08/AggregatorV3Interface.sol";
+import "../dependencies08/OraCheckContract.sol";
 import "./ChainlinkFeedReader.sol";
 import "./SequencerGuard.sol";
 
@@ -32,19 +32,19 @@ import "./SequencerGuard.sol";
  *    primary is broken/stale. Only when neither path yields a trustworthy
  *    price does the adapter serve lastGoodPrice and flag the oracle down.
  */
-contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuard, IPriceFeed {
+contract ChainlinkPriceFeed is OraCheckContract, ChainlinkFeedReader, SequencerGuard, IPriceFeed {
 
     string constant public NAME = "ChainlinkPriceFeed";
 
     AggregatorV3Interface public immutable aggregator;
     uint8 public immutable feedDecimals;
-    uint public immutable timeout;  // seconds until a round is considered stale
+    uint256 public immutable timeout;  // seconds until a round is considered stale
 
     AggregatorV3Interface public immutable fallbackAggregator; // address(0) = none
     uint8 public immutable fallbackDecimals;
-    uint public immutable maxDeviationBps; // max single-fetch move vs lastGoodPrice without confirmation
+    uint256 public immutable maxDeviationBps; // max single-fetch move vs lastGoodPrice without confirmation
 
-    uint public lastGoodPrice;
+    uint256 public lastGoodPrice;
     bool public oracleLive;
     bool public usingFallback; // monitoring hook: primary broken, secondary serving
 
@@ -53,12 +53,11 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuar
 
     constructor(
         address _aggregator,
-        uint _timeout,
+        uint256 _timeout,
         address _sequencerUptimeFeed,
         address _fallbackAggregator,
-        uint _maxDeviationBps
+        uint256 _maxDeviationBps
     )
-        public
         SequencerGuard(_sequencerUptimeFeed)
     {
         checkContract(_aggregator);
@@ -82,7 +81,7 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuar
         fallbackAggregator = AggregatorV3Interface(_fallbackAggregator);
         fallbackDecimals = fbDec;
 
-        (uint price, bool ok) = _readFeed(agg, dec, _timeout);
+        (uint256 price, bool ok) = _readFeed(agg, dec, _timeout);
         require(ok, "ChainlinkPriceFeed: initial feed response invalid");
         require(_sequencerUpAt(_sequencerUptimeFeed), "ChainlinkPriceFeed: sequencer down at deploy");
         lastGoodPrice = price;
@@ -90,18 +89,18 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuar
     }
 
     // |a - b| within maxDeviationBps of b
-    function _withinDeviation(uint _a, uint _b) internal view returns (bool) {
-        uint diff = _a > _b ? _a - _b : _b - _a;
+    function _withinDeviation(uint256 _a, uint256 _b) internal view returns (bool) {
+        uint256 diff = _a > _b ? _a - _b : _b - _a;
         return diff * 10000 <= _b * maxDeviationBps;
     }
 
     /* Resolve the trustworthy current price:
      *   ok=true  -> price accepted (fb = served by the fallback source)
      *   ok=false -> nothing trustworthy, caller serves lastGoodPrice */
-    function _resolvePrice() internal view returns (uint price, bool ok, bool fb) {
-        (uint pP, bool okP) = _readFeed(aggregator, feedDecimals, timeout);
+    function _resolvePrice() internal view returns (uint256 price, bool ok, bool fb) {
+        (uint256 pP, bool okP) = _readFeed(aggregator, feedDecimals, timeout);
         bool hasFb = address(fallbackAggregator) != address(0);
-        uint pF; bool okF;
+        uint256 pF; bool okF;
         if (hasFb) { (pF, okF) = _readFeed(fallbackAggregator, fallbackDecimals, timeout); }
 
         if (okP) {
@@ -116,18 +115,18 @@ contract ChainlinkPriceFeed is CheckContract, ChainlinkFeedReader, SequencerGuar
     }
 
     // View variant for frontends: current price if healthy, else lastGoodPrice.
-    function getPrice() external view returns (uint) {
+    function getPrice() external view returns (uint256) {
         if (!_sequencerUp()) { return lastGoodPrice; }
-        (uint price, bool ok, ) = _resolvePrice();
+        (uint256 price, bool ok, ) = _resolvePrice();
         return ok ? price : lastGoodPrice;
     }
 
-    function fetchPrice() external override returns (uint) {
+    function fetchPrice() external override returns (uint256) {
         if (!_sequencerUp()) {
             if (oracleLive) { oracleLive = false; emit OracleStatusChanged(false); }
             return lastGoodPrice;
         }
-        (uint price, bool ok, bool fb) = _resolvePrice();
+        (uint256 price, bool ok, bool fb) = _resolvePrice();
         if (ok) {
             lastGoodPrice = price;
             if (!oracleLive) { oracleLive = true; emit OracleStatusChanged(true); }

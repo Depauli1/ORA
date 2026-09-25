@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/IERC20.sol";
+import "../dependencies08/IERC20.sol";
 
 /*
  * ORA rates engine — InterestRouter.
@@ -16,8 +15,6 @@ import "../Dependencies/IERC20.sol";
  * setAddresses is one-shot: ownership is burned once targets are wired.
  */
 contract InterestRouter {
-    using SafeMath for uint256;
-
     uint256 public constant VAULT_SHARE_BPS = 8000; // 80%
 
     IERC20 public orUSD;
@@ -28,7 +25,7 @@ contract InterestRouter {
     event AddressesSet(address orUSD, address vault, address treasury);
     event InterestDistributed(uint256 toVault, uint256 toTreasury);
 
-    constructor() public {
+    constructor() {
         owner = msg.sender;
     }
 
@@ -50,8 +47,8 @@ contract InterestRouter {
     function distribute() external {
         uint256 bal = orUSD.balanceOf(address(this));
         require(bal > 0, "InterestRouter: nothing to distribute");
-        uint256 toVault = bal.mul(VAULT_SHARE_BPS).div(10000);
-        uint256 toTreasury = bal.sub(toVault);
+        uint256 toVault = bal * VAULT_SHARE_BPS / 10000;
+        uint256 toTreasury = bal - toVault;
         require(orUSD.transfer(vault, toVault), "InterestRouter: vault transfer failed");
         require(orUSD.transfer(treasury, toTreasury), "InterestRouter: treasury transfer failed");
         emit InterestDistributed(toVault, toTreasury);

@@ -3,3 +3,8 @@ artifacts/
 cache/
 bin/
 .secret
+.testnet-deployer.key
+coverage.json
+coverage/
+out/
+app/dist

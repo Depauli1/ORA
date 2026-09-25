@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/AggregatorV3Interface.sol";
+import "../dependencies08/AggregatorV3Interface.sol";
 
 /*
  * ORA oracle hardening — Chainlink L2 sequencer-uptime check (Base et al).
@@ -19,12 +19,12 @@ import "../Dependencies/AggregatorV3Interface.sol";
  *
  * Base mainnet uptime feed: 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433
  */
-contract SequencerGuard {
+abstract contract SequencerGuard {
 
     AggregatorV3Interface public immutable sequencerUptimeFeed; // address(0) = disabled
-    uint constant public SEQUENCER_GRACE_PERIOD = 3600;         // 1h after restart
+    uint256 constant public SEQUENCER_GRACE_PERIOD = 3600;      // 1h after restart
 
-    constructor(address _sequencerUptimeFeed) internal {
+    constructor(address _sequencerUptimeFeed) {
         sequencerUptimeFeed = AggregatorV3Interface(_sequencerUptimeFeed);
     }
 
@@ -33,8 +33,9 @@ contract SequencerGuard {
         return _sequencerUpAt(address(sequencerUptimeFeed));
     }
 
-    // address-parameterized variant: immutables cannot be read during
-    // construction (Solidity 0.6), so deploy-time checks pass the address in
+    // address-parameterized variant so deploy-time checks can pass the address
+    // in (immutables read fine in 0.8 constructors, but the shared helper
+    // keeps every call site on one code path)
     function _sequencerUpAt(address _feed) internal view returns (bool) {
         if (_feed == address(0)) { return true; }
         try AggregatorV3Interface(_feed).latestRoundData() returns (

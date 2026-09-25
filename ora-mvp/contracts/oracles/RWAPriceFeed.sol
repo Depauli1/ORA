@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Interfaces/IPriceFeed.sol";
-import "../Dependencies/AggregatorV3Interface.sol";
-import "../Dependencies/CheckContract.sol";
+import "../dependencies08/IPriceFeed.sol";
+import "../dependencies08/AggregatorV3Interface.sol";
+import "../dependencies08/OraCheckContract.sol";
 import "./ChainlinkFeedReader.sol";
 
 /*
@@ -30,28 +30,27 @@ import "./ChainlinkFeedReader.sol";
  *     (72h, covering weekends) the adapter falls back to lastGoodPrice and
  *     flags the oracle as down.
  */
-contract RWAPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
-    using SafeMath for uint256;
+contract RWAPriceFeed is OraCheckContract, ChainlinkFeedReader, IPriceFeed {
 
     string constant public NAME = "RWAPriceFeed";
 
     AggregatorV3Interface public immutable navAggregator;
     uint8 public immutable navDecimals;
-    uint public immutable timeout;
+    uint256 public immutable timeout;
 
-    uint constant public MAX_UP_DRIFT = 2e16;       // +2% max increase per fetch
-    uint constant public SHOCK_THRESHOLD = 2e16;    // >2% below high-water mark = shock
-    uint constant public DECIMAL_PRECISION = 1e18;
+    uint256 constant public MAX_UP_DRIFT = 2e16;       // +2% max increase per fetch
+    uint256 constant public SHOCK_THRESHOLD = 2e16;    // >2% below high-water mark = shock
+    uint256 constant public DECIMAL_PRECISION = 1e18;
 
-    uint public lastGoodPrice;
-    uint public highWaterMark;
+    uint256 public lastGoodPrice;
+    uint256 public highWaterMark;
     bool public oracleLive;
     bool public navShock;
 
     event OracleStatusChanged(bool _live);
-    event NavShock(bool _active, uint _nav, uint _highWaterMark);
+    event NavShock(bool _active, uint256 _nav, uint256 _highWaterMark);
 
-    constructor(address _navAggregator, uint _timeout) public {
+    constructor(address _navAggregator, uint256 _timeout) {
         checkContract(_navAggregator);
         require(_timeout > 0, "RWAPriceFeed: zero timeout");
 
@@ -62,7 +61,7 @@ contract RWAPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
         navDecimals = dec;
         timeout = _timeout;
 
-        (uint nav, bool ok) = _readFeed(agg, dec, _timeout);
+        (uint256 nav, bool ok) = _readFeed(agg, dec, _timeout);
         require(ok, "RWAPriceFeed: initial feed response invalid");
         lastGoodPrice = nav;
         highWaterMark = nav;
@@ -70,19 +69,19 @@ contract RWAPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
     }
 
     // View variant for frontends: the price fetchPrice() would use right now.
-    function getPrice() external view returns (uint) {
-        (uint nav, bool ok) = _readFeed(navAggregator, navDecimals, timeout);
+    function getPrice() external view returns (uint256) {
+        (uint256 nav, bool ok) = _readFeed(navAggregator, navDecimals, timeout);
         if (!ok) { return lastGoodPrice; }
         return _clampUp(nav);
     }
 
     // Raw reported NAV + feed health, for monitoring/UI.
-    function getNav() external view returns (uint nav, bool ok) {
+    function getNav() external view returns (uint256 nav, bool ok) {
         return _readFeed(navAggregator, navDecimals, timeout);
     }
 
-    function fetchPrice() external override returns (uint) {
-        (uint nav, bool ok) = _readFeed(navAggregator, navDecimals, timeout);
+    function fetchPrice() external override returns (uint256) {
+        (uint256 nav, bool ok) = _readFeed(navAggregator, navDecimals, timeout);
 
         if (!ok) {
             if (oracleLive) { oracleLive = false; emit OracleStatusChanged(false); }
@@ -90,12 +89,12 @@ contract RWAPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
         }
         if (!oracleLive) { oracleLive = true; emit OracleStatusChanged(true); }
 
-        uint price = _clampUp(nav);
+        uint256 price = _clampUp(nav);
 
         lastGoodPrice = price;
         if (price > highWaterMark) { highWaterMark = price; }
 
-        bool shock = price < highWaterMark.mul(DECIMAL_PRECISION.sub(SHOCK_THRESHOLD)).div(DECIMAL_PRECISION);
+        bool shock = price < highWaterMark * (DECIMAL_PRECISION - SHOCK_THRESHOLD) / DECIMAL_PRECISION;
         if (shock != navShock) {
             navShock = shock;
             emit NavShock(shock, price, highWaterMark);
@@ -106,8 +105,8 @@ contract RWAPriceFeed is CheckContract, ChainlinkFeedReader, IPriceFeed {
     }
 
     // Ratchet: never accept more than +2% above the last accepted price.
-    function _clampUp(uint _nav) internal view returns (uint) {
-        uint cap = lastGoodPrice.mul(DECIMAL_PRECISION.add(MAX_UP_DRIFT)).div(DECIMAL_PRECISION);
+    function _clampUp(uint256 _nav) internal view returns (uint256) {
+        uint256 cap = lastGoodPrice * (DECIMAL_PRECISION + MAX_UP_DRIFT) / DECIMAL_PRECISION;
         return _nav > cap ? cap : _nav;
     }
 }

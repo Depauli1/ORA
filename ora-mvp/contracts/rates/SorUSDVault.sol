@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/SafeMath.sol";
-import "../Dependencies/IERC20.sol";
+import "../dependencies08/IERC20.sol";
 
 /*
  * ORA rates engine — sorUSD, the savings vault for orUSD.
@@ -16,8 +15,6 @@ import "../Dependencies/IERC20.sol";
  * shares to a dead address, making share-price manipulation uneconomical.
  */
 contract SorUSDVault {
-    using SafeMath for uint256;
-
     string public constant name = "Savings orUSD";
     string public constant symbol = "sorUSD";
     uint8 public constant decimals = 18;
@@ -35,7 +32,7 @@ contract SorUSDVault {
     event Deposit(address indexed sender, uint256 assets, uint256 shares);
     event Withdraw(address indexed sender, uint256 assets, uint256 shares);
 
-    constructor(address _asset) public {
+    constructor(address _asset) {
         require(_asset != address(0), "SorUSD: asset is zero address");
         asset = IERC20(_asset);
     }
@@ -47,11 +44,11 @@ contract SorUSDVault {
     }
 
     function convertToShares(uint256 _assets) public view returns (uint256) {
-        return totalSupply == 0 ? _assets : _assets.mul(totalSupply).div(totalAssets());
+        return totalSupply == 0 ? _assets : _assets * totalSupply / totalAssets();
     }
 
     function convertToAssets(uint256 _shares) public view returns (uint256) {
-        return totalSupply == 0 ? _shares : _shares.mul(totalAssets()).div(totalSupply);
+        return totalSupply == 0 ? _shares : _shares * totalAssets() / totalSupply;
     }
 
     // orUSD value of one sorUSD share, 1e18-scaled
@@ -65,10 +62,10 @@ contract SorUSDVault {
         require(_assets > 0, "SorUSD: zero assets");
         if (totalSupply == 0) {
             require(_assets > DEAD_SHARES, "SorUSD: first deposit too small");
-            shares = _assets.sub(DEAD_SHARES);
+            shares = _assets - DEAD_SHARES;
             _mint(DEAD_ADDRESS, DEAD_SHARES);
         } else {
-            shares = _assets.mul(totalSupply).div(totalAssets());
+            shares = _assets * totalSupply / totalAssets();
             require(shares > 0, "SorUSD: deposit computes to zero shares");
         }
         require(asset.transferFrom(msg.sender, address(this), _assets), "SorUSD: transfer in failed");
@@ -78,7 +75,7 @@ contract SorUSDVault {
 
     function redeem(uint256 _shares) external returns (uint256 assets) {
         require(_shares > 0, "SorUSD: zero shares");
-        assets = _shares.mul(totalAssets()).div(totalSupply);
+        assets = _shares * totalAssets() / totalSupply;
         _burn(msg.sender, _shares);
         require(asset.transfer(msg.sender, assets), "SorUSD: transfer out failed");
         emit Withdraw(msg.sender, assets, _shares);
@@ -98,7 +95,7 @@ contract SorUSDVault {
     }
 
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool) {
-        allowance[_from][msg.sender] = allowance[_from][msg.sender].sub(_value, "SorUSD: allowance exceeded");
+        allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
         _transfer(_from, _to, _value);
         return true;
     }
@@ -107,20 +104,20 @@ contract SorUSDVault {
 
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(_to != address(0), "SorUSD: transfer to zero address");
-        balanceOf[_from] = balanceOf[_from].sub(_value, "SorUSD: balance exceeded");
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(_from, _to, _value);
     }
 
     function _mint(address _to, uint256 _value) internal {
-        totalSupply = totalSupply.add(_value);
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        totalSupply = totalSupply + _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(address(0), _to, _value);
     }
 
     function _burn(address _from, uint256 _value) internal {
-        balanceOf[_from] = balanceOf[_from].sub(_value, "SorUSD: burn exceeds balance");
-        totalSupply = totalSupply.sub(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        totalSupply = totalSupply - _value;
         emit Transfer(_from, address(0), _value);
     }
 }

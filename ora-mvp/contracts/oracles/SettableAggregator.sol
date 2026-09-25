@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
-import "../Dependencies/AggregatorV3Interface.sol";
+import "../dependencies08/AggregatorV3Interface.sol";
 
 /*
  * ORA Phase 1.5 — Chainlink-compatible aggregator with public setters,
@@ -17,7 +17,7 @@ contract SettableAggregator is AggregatorV3Interface {
     uint256 private _updatedAt;
     uint80 private _roundId;
 
-    constructor(uint8 decimals_, string memory description_, int256 initialAnswer_) public {
+    constructor(uint8 decimals_, string memory description_, int256 initialAnswer_) {
         _decimals = decimals_;
         _description = description_;
         _set(initialAnswer_);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
 /*
  * ORA Phase 1 — zero-emission community issuance for secondary branches.
@@ -14,11 +14,11 @@ contract ZeroCommunityIssuance {
 
     string constant public NAME = "ZeroCommunityIssuance";
 
-    function issueLQTY() external returns (uint) {
+    function issueLQTY() external returns (uint256) {
         return 0;
     }
 
-    function sendLQTY(address _account, uint _LQTYamount) external {
+    function sendLQTY(address _account, uint256 _LQTYamount) external {
         // no-op: nothing is ever issued
     }
 }

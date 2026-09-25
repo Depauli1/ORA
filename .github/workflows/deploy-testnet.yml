@@ -6,13 +6,13 @@
 # Output:  commits ora-mvp/app/deployment-baseSepolia.json back to the branch —
 #          the ORA web app's "Base Sepolia" network switch reads that file.
 #
-# Deployer key: secrets.DEPLOYER_KEY if configured, else the committed
-# throwaway testnet key (ora-mvp/.testnet-deployer.key — faucet ETH only).
+# Deployer key: the DEPLOYER_KEY Actions secret (REQUIRED — there is no
+# committed fallback key; see DEPLOY_BASE_SEPOLIA.md §1 for setup).
 name: Deploy ORA to Base Sepolia
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora"]
+    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
     paths: ["ora-mvp/.deploy-testnet-trigger"]
 
 permissions:

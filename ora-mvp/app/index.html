@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ORA Protocol — Interest-free borrowing, hard-pegged orUSD</title>
 <link rel="icon" href="logo.png" />
-<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <header>
@@ -25,6 +24,7 @@
     </select>
     <select id="walletSelect" style="display:none" title="choose which installed wallet to connect (EIP-6963)"></select>
     <button id="btnConnect" style="display:none">Connect wallet</button>
+    <button id="btnWC" style="display:none" title="connect with a mobile wallet via WalletConnect">📱 WalletConnect</button>
     <select id="accountSelect">
       <option value="alice">Alice (demo)</option>
       <option value="bob">Bob (demo)</option>
@@ -257,10 +257,9 @@
   </div>
 </main>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <footer>ORA Protocol — Liquity-engine core. ETH + wstETH + wmTBILL (RWA yield-share, MCR 105%) + ETH v2 (user-set rates, one-click leverage) collateral branches · Chainlink/NAV oracle adapters with circuit breakers · redemption hard peg. Interacting with smart contracts carries risk of total loss; nothing here is financial advice. Demo accounts exist on the local test chain only.</footer>
 
-<script src="vendor/ethers.umd.min.js"></script>
-<script src="app.js?v=harden1"></script>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>

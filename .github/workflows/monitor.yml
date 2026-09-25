@@ -1,6 +1,8 @@
 # ORA invariant monitor — runs the read-only health watcher against the Base
-# Sepolia deployment. On any violated invariant the run fails and a GitHub
-# issue is opened (deduped by title).
+# Sepolia deployment. On any violated invariant the run fails and alerts via
+# the ORA_ALERT_WEBHOOK secret when set, plus a GitHub issue (deduped by
+# title) when issues are enabled. At least one channel must deliver or the
+# alert step itself fails (a silent backstop is worse than none).
 #
 # Triggers:
 #  - cron every 6h (NOTE: GitHub only schedules workflows from the DEFAULT
@@ -43,19 +45,29 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat ../monitor-output.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - name: Open an alert issue on violation
+      - name: Send backstop alert (webhook, then issue)
         if: failure()
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
+          WEBHOOK: ${{ secrets.ORA_ALERT_WEBHOOK }}
         run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          OUT="$(tail -c 4000 monitor-output.txt 2>/dev/null || echo 'no output captured')"
+          ALERTED=""
+          if [ -n "$WEBHOOK" ]; then
+            if curl -sf -m 20 -X POST -H 'content-type: application/json' \
+                --data "$(jq -n --arg t "[ora-monitor-cron] ORA invariant violation on Base Sepolia — $RUN_URL" '{text:$t}')" \
+                "$WEBHOOK"; then
+              ALERTED="webhook"; echo "alerted via webhook"
+            else echo "webhook alert FAILED"; fi
+          else echo "no ORA_ALERT_WEBHOOK secret — skipping webhook"; fi
           TITLE="[monitor] ORA invariant violation on Base Sepolia"
-          BODY=$(printf 'The invariant watcher failed on run %s:\n\n```\n%s\n```\n' \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            "$(tail -c 4000 monitor-output.txt 2>/dev/null || echo 'no output captured')")
-          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number' || true)
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$BODY"
-          else
-            gh issue create --title "$TITLE" --body "$BODY" --label bug || gh issue create --title "$TITLE" --body "$BODY"
-          fi
+          BODY=$(printf 'The invariant watcher failed on run %s:\n\n```\n%s\n```\n' "$RUN_URL" "$OUT")
+          if EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null) && [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY" 2>/dev/null && ALERTED="$ALERTED issue" || echo "issue comment FAILED"
+          elif gh issue create --title "$TITLE" --body "$BODY" --label bug 2>/dev/null || gh issue create --title "$TITLE" --body "$BODY" 2>/dev/null; then
+            ALERTED="$ALERTED issue"
+          else echo "issue alert FAILED (issues may be disabled)"; fi
+          if [ -z "$ALERTED" ]; then echo "BACKSTOP ALERTING IS BROKEN — no channel delivered"; exit 1; fi
+          echo "alerted via:$ALERTED"

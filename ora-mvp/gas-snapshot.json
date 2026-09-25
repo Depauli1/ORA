@@ -1,0 +1,28 @@
+{
+  "updated": "2026-09-25",
+  "solc": {
+    "0.6.11": "0.6.11",
+    "0.8.24": "0.8.24"
+  },
+  "tolerance": 0.1,
+  "ops": {
+    "rates.openTroveWithRate": 451371,
+    "rates.addColl": 220816,
+    "rates.withdrawLUSD": 195215,
+    "rates.repayLUSD": 193783,
+    "rates.adjustTroveRate": 150067,
+    "rates.accrueTroveInterest": 85141,
+    "rates.distributeInterest": 97792,
+    "sorUSD.deposit": 119731,
+    "sorUSD.redeem": 76524,
+    "rates.liquidate": 668295,
+    "guardian.pauseBorrowing": 47938,
+    "guardian.unpauseBorrowing": 25334,
+    "rwa.openTrove": 464673,
+    "rwa.provideToSP": 162917,
+    "rwa.withdrawFromSP": 196607,
+    "rwa.liquidatePartial": 457393,
+    "keeper.liquidateTroves(5)": 637936,
+    "keeper.batchLiquidateTroves(skip-path)": 42418
+  }
+}

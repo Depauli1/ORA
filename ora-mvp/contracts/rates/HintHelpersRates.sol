@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.24;
 
 /*
  * ORA rates engine — hint helper for the rate-ordered sorted list.
@@ -11,9 +11,9 @@ pragma solidity 0.6.11;
  */
 
 interface ITroveManagerRatesView {
-    function getTroveOwnersCount() external view returns (uint);
-    function getTroveFromTroveOwnersArray(uint _index) external view returns (address);
-    function troveAnnualRate(address _borrower) external view returns (uint);
+    function getTroveOwnersCount() external view returns (uint256);
+    function getTroveFromTroveOwnersArray(uint256 _index) external view returns (address);
+    function troveAnnualRate(address _borrower) external view returns (uint256);
 }
 
 contract HintHelpersRates {
@@ -21,17 +21,17 @@ contract HintHelpersRates {
 
     ITroveManagerRatesView public immutable troveManager;
 
-    constructor(address _troveManager) public {
+    constructor(address _troveManager) {
         require(_troveManager != address(0), "HintHelpersRates: zero address");
         troveManager = ITroveManagerRatesView(_troveManager);
     }
 
-    function getApproxHint(uint _annualRate, uint _numTrials, uint _inputRandomSeed)
+    function getApproxHint(uint256 _annualRate, uint256 _numTrials, uint256 _inputRandomSeed)
         external
         view
-        returns (address hintAddress, uint diff, uint latestRandomSeed)
+        returns (address hintAddress, uint256 diff, uint256 latestRandomSeed)
     {
-        uint arrayLength = troveManager.getTroveOwnersCount();
+        uint256 arrayLength = troveManager.getTroveOwnersCount();
 
         if (arrayLength == 0) {
             return (address(0), 0, _inputRandomSeed);
@@ -41,13 +41,13 @@ contract HintHelpersRates {
         diff = _absDiff(troveManager.troveAnnualRate(hintAddress), _annualRate);
         latestRandomSeed = _inputRandomSeed;
 
-        uint i = 1;
+        uint256 i = 1;
         while (i < _numTrials) {
-            latestRandomSeed = uint(keccak256(abi.encodePacked(latestRandomSeed)));
+            latestRandomSeed = uint256(keccak256(abi.encodePacked(latestRandomSeed)));
 
-            uint arrayIndex = latestRandomSeed % arrayLength;
+            uint256 arrayIndex = latestRandomSeed % arrayLength;
             address currentAddress = troveManager.getTroveFromTroveOwnersArray(arrayIndex);
-            uint currentDiff = _absDiff(troveManager.troveAnnualRate(currentAddress), _annualRate);
+            uint256 currentDiff = _absDiff(troveManager.troveAnnualRate(currentAddress), _annualRate);
 
             if (currentDiff < diff) {
                 diff = currentDiff;
@@ -57,7 +57,7 @@ contract HintHelpersRates {
         }
     }
 
-    function _absDiff(uint _a, uint _b) internal pure returns (uint) {
+    function _absDiff(uint256 _a, uint256 _b) internal pure returns (uint256) {
         return _a >= _b ? _a - _b : _b - _a;
     }
 }

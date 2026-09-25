@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.11;
-
-import "../Dependencies/SafeMath.sol";
+pragma solidity 0.8.24;
 
 /*
  * ORA Phase 4 — mock tokenized T-bill money-market fund share (mTBILL),
@@ -15,8 +13,6 @@ import "../Dependencies/SafeMath.sol";
  * allowlisted by the issuer).
  */
 contract MockTBill {
-    using SafeMath for uint256;
-
     string public constant name = "ORA Tokenized T-Bill Fund (Mock)";
     string public constant symbol = "mTBILL";
     uint8 public constant decimals = 18;
@@ -25,15 +21,15 @@ contract MockTBill {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    uint public constant FAUCET_CAP = 100000e18;
+    uint256 public constant FAUCET_CAP = 100000e18;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     function faucet(uint256 _amount) external {
         require(_amount <= FAUCET_CAP, "MockTBill: faucet cap is 100000 per call");
-        totalSupply = totalSupply.add(_amount);
-        balanceOf[msg.sender] = balanceOf[msg.sender].add(_amount);
+        totalSupply = totalSupply + _amount;
+        balanceOf[msg.sender] = balanceOf[msg.sender] + _amount;
         emit Transfer(address(0), msg.sender, _amount);
     }
 
@@ -43,7 +39,7 @@ contract MockTBill {
     }
 
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool) {
-        allowance[_from][msg.sender] = allowance[_from][msg.sender].sub(_value, "MockTBill: transfer amount exceeds allowance");
+        allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
         _transfer(_from, _to, _value);
         return true;
     }
@@ -56,8 +52,8 @@ contract MockTBill {
 
     function _transfer(address _from, address _to, uint256 _value) internal {
         require(_to != address(0), "MockTBill: transfer to zero address");
-        balanceOf[_from] = balanceOf[_from].sub(_value, "MockTBill: transfer amount exceeds balance");
-        balanceOf[_to] = balanceOf[_to].add(_value);
+        balanceOf[_from] = balanceOf[_from] - _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(_from, _to, _value);
     }
 }

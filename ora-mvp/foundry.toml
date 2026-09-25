@@ -1,0 +1,12 @@
+[profile.default]
+src = "contracts"
+test = "test/foundry"
+libs = ["lib", "node_modules"]
+# No solc pin: the tree mixes 0.6.11 (upstream core) and 0.8.24 (Tier 3), so a
+# pinned version fails half the files — auto-detect picks per-file instead.
+optimizer = true
+optimizer_runs = 200
+# Handler reverts are invariant breaches by construction (ops are clamped and
+# skip empty cases), so a reverting call must fail the run, not be discarded.
+invariant = { runs = 256, depth = 24, fail_on_revert = true }
+fuzz = { runs = 512 }

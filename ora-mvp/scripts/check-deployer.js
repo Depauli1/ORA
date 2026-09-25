@@ -10,11 +10,11 @@ const MIN = ethers.parseEther(process.env.ORA_MIN_DEPLOY_ETH || "0.03");
 
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  for (const f of [".secret", ".testnet-deployer.key"]) {
+  for (const f of [".secret"]) {
     const p = path.join(__dirname, "..", f);
     if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
   }
-  throw new Error("No deployer key found (.secret / .testnet-deployer.key / ORA_DEPLOYER_KEY)");
+  throw new Error("No deployer key: set the DEPLOYER_KEY Actions secret (CI) or ORA_DEPLOYER_KEY / .secret (local). See DEPLOY_BASE_SEPOLIA.md §1.");
 }
 
 async function main() {

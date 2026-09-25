@@ -6,6 +6,10 @@
 // Usage:
 //   node scripts/gen-deployer.js          # once; fund the printed address
 //   npx hardhat run scripts/deploy-public.js --network baseSepolia
+//
+// Testnet-only venues (OraSwapPool demo AMM + LeverZapFactory) are skipped
+// automatically on mainnet chains (see scripts/deploy-guards.js) — the
+// manifest keeps the fields as null and the app/seeds/verifiers degrade.
 const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
@@ -13,7 +17,7 @@ const { ethers } = hre;
 
 function deployerKey() {
   if (process.env.ORA_DEPLOYER_KEY) return process.env.ORA_DEPLOYER_KEY;
-  for (const f of [".secret", ".testnet-deployer.key"]) {
+  for (const f of [".secret"]) {
     const p = path.join(__dirname, "..", f);
     if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").trim();
   }
