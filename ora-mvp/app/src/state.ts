@@ -4,6 +4,7 @@
 import { ethers } from "ethers";
 import type { AppConfig, BranchCfg, Deployment } from "./config";
 import { DEFAULT_CONFIG } from "./config";
+import type { ActivityRecord } from "./activity";
 import {
   isNativeBranch, isRWABranch, isRatesBranch, collSymOf, faucetAmtOf,
   brMcrOf, brSoftOf,
@@ -45,7 +46,20 @@ class Store {
   netMode = "local";
   hostname = "localhost";
   price = 0;
+  nativeBalance = 0n;
+  collateralBalance = 0n;
+  orUsdBalance = 0n;
   busy = false;
+  activeActivityId: string | null = null;
+  networkReady = false;
+  position: { collateral: bigint; debt: bigint } | null = null;
+  borrowingRate = 0n;
+  oracleLive: boolean | null = null;
+  navShock = false;
+  recoveryMode = false;
+  lastRefreshAt: number | null = null;
+  lastRefreshError: string | null = null;
+  activity: ActivityRecord[] = [];
   troveRows = 50;
   discoveredWallets: WalletDiscovery[] = [];
   appConfig: AppConfig = { ...DEFAULT_CONFIG };
@@ -62,7 +76,20 @@ class Store {
     this.netMode = "local";
     this.hostname = hostname;
     this.price = 0;
+    this.nativeBalance = 0n;
+    this.collateralBalance = 0n;
+    this.orUsdBalance = 0n;
     this.busy = false;
+    this.activeActivityId = null;
+    this.networkReady = false;
+    this.position = null;
+    this.borrowingRate = 0n;
+    this.oracleLive = null;
+    this.navShock = false;
+    this.recoveryMode = false;
+    this.lastRefreshAt = null;
+    this.lastRefreshError = null;
+    this.activity = [];
     this.troveRows = 50;
     this.discoveredWallets = [];
     this.appConfig = { ...DEFAULT_CONFIG };
@@ -72,6 +99,14 @@ class Store {
 }
 
 export const state = new Store();
+
+export const MAX_MARKET_DATA_AGE_MS = 30_000;
+
+export function hasFreshMarketData(now = Date.now()): boolean {
+  if (state.lastRefreshAt === null || state.lastRefreshError) return false;
+  const age = now - state.lastRefreshAt;
+  return age >= 0 && age <= MAX_MARKET_DATA_AGE_MS;
+}
 
 // Fail-fast accessors (throw before boot instead of cryptic ethers errors).
 export function req<T>(v: T | null | undefined, what: string): T {

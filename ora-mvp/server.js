@@ -27,6 +27,7 @@ function createServer(opts = {}) {
     faucetKey = process.env.FAUCET_KEY || "",
     wcProjectId = process.env.WALLETCONNECT_PROJECT_ID || "",
     cspExtra = process.env.CSP_CONNECT_EXTRA || "",
+    previewDemo = process.env.ARENA_PREVIEW_DEMO === "1",
     appDir = path.join(__dirname, "app"),
   } = opts;
   const H = () => lib.securityHeaders(cspExtra);
@@ -75,6 +76,9 @@ function createServer(opts = {}) {
       return res.end(JSON.stringify({
         faucet: faucetKey !== "",
         walletConnectProjectId: wcProjectId || null,
+        // Demo mode is never enabled by default and is exposed only when the
+        // server opts in AND the request uses an Arena sandbox preview host.
+        previewDemo: previewDemo && lib.isArenaPreviewHost(req.headers.host),
       }));
     }
 

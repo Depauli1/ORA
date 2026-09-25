@@ -3,13 +3,14 @@
 import "./styles.css";
 import { NETWORKS } from "./config";
 import { state } from "./state";
-import { isLocalhost } from "./wallet-gate";
+import { canUseDemo } from "./wallet-gate";
 import { initWalletDiscovery } from "./wallet";
 import { loadConfig, setNetwork } from "./network";
-import { refresh } from "./views";
+import { refresh, updateDataFreshness } from "./views";
 import { wireActions } from "./actions";
 import { toast } from "./dom";
 import { reason } from "./format";
+import { hydrateActivity } from "./activity";
 
 // Error tracking: uncaught errors/rejections are reported to the app server's
 // /log ring buffer (inspect at GET /log). No third-party telemetry.
@@ -39,14 +40,18 @@ export function installErrorHooks(): void {
 export async function boot(hostname: string = location.hostname): Promise<void> {
   installErrorHooks();
   state.reset(hostname);
+  hydrateActivity();
   initWalletDiscovery();
   await loadConfig();
-  // Off loopback there is no local chain — boot straight into Base Sepolia
-  // (public RPC + wallet) instead of a gated local mode. Localhost keeps
-  // the demo chain default.
-  await setNetwork(isLocalhost(hostname) ? "local" : "baseSepolia");
+  // Localhost keeps the local demo default. The hosted Arena preview may use
+  // it only when its server explicitly opts in; all other public hosts remain
+  // on the published-network path.
+  await setNetwork(canUseDemo(hostname, state.appConfig.previewDemo) ? "local" : "baseSepolia");
   wireActions();
-  state.refreshTimer = setInterval(() => { if (!state.busy) void refresh(); }, 8000);
+  state.refreshTimer = setInterval(() => {
+    updateDataFreshness();
+    if (!state.busy) void refresh();
+  }, 8000);
 }
 
 // Auto-boot in the browser only — under vitest (MODE=test) the suites drive

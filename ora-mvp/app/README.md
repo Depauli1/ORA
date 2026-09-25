@@ -1,7 +1,7 @@
 # ORA frontend
 
 TypeScript + Vite app served by the hardened Node server (`../server.js`).
-Strict `tsc`, 52 vitest tests, one Playwright e2e — all gated in CI.
+Strict `tsc`, 74 vitest tests, and two Playwright e2e tests — all gated in CI.
 
 ## Commands (from `ora-mvp/`)
 
@@ -26,6 +26,7 @@ Local full stack: `npm run chain`, `npm run deploy`, then `npm run app`.
 | `LOG_TOKEN` | Bearer token for `GET /log` from non-loopback hosts (loopback is open). |
 | `CSP_CONNECT_EXTRA` | Extra `connect-src` origins for the content-security policy. |
 | `PORT` | Listen port (default 3000). RPC proxy target is fixed at `127.0.0.1:8545`. |
+| `ARENA_PREVIEW_DEMO` | Set to `1` only for an isolated Arena preview to allow the local Hardhat demo on port-prefixed `*.e2b.app` hosts. Unset in normal deployments. |
 
 ## Architecture (`app/src/`)
 
@@ -38,15 +39,18 @@ Local full stack: `npm run chain`, `npm run deploy`, then `npm run app`.
 - `faucet.ts` — server-faucet client (no key in the bundle, ever)
 - `walletconnect.ts` — lazy WalletConnect + own QR modal (SVG, no canvas)
 - `network.ts` — network switching, `/config` loading
-- `views.ts` — read path + rendering (`refresh()`, troves table, previews)
-- `actions.ts` — all button/input wiring (no chain logic, no rendering)
+- `views.ts` — read path + rendering (`refresh()`, troves table, health and adjustment previews)
+- `actions.ts` — section navigation and button/input wiring
+- `activity.ts` — persistent transaction lifecycle/history with explorer links
 - `dom.ts` / `format.ts` — typed element access + toast; number formatting
 - `wallet-gate.ts` — `isLocalhost()` (shared with tests)
 
 ## Security properties (tested)
 
-- **Demo keys are localhost-only**: `isLocalhost()` gates `setAccount()` and
-  local mode; off-localhost the picker never wires and no wallet is built.
+- **Demo keys are localhost-only by default**: `isLocalhost()` gates `setAccount()`
+  and local mode. A deliberate `ARENA_PREVIEW_DEMO=1` opt-in enables only the
+  port-prefixed Arena sandbox host; the local chain is still reached through
+  the app server's loopback RPC proxy. Ordinary public hosts remain blocked.
 - **No faucet key in the bundle**: the old client-side drip (broken — it
   signed as an account holding no ORA) is replaced by server-side `/faucet`
   with hourly per-IP/per-address quotas. e2e derives the key from hardhat
