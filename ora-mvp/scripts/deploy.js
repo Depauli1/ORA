@@ -6,6 +6,7 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { isProdNetwork, assertProdConfig } = require("./oracle-policy");
 
 const { ethers, network } = hre;
 const maxBytes32 = "0x" + "f".repeat(64);
@@ -15,13 +16,28 @@ const maxBytes32 = "0x" + "f".repeat(64);
 const REAL_FEEDS = {
   baseSepolia: {
     ethUsd: process.env.ORA_ETHUSD_FEED || "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1"
+  },
+  // Base mainnet (PROD): every feed address is env-provided — there are no
+  // hardcoded guesses, and probe failures THROW (never a mock on prod).
+  base: {
+    prod: true,
+    ethUsd: process.env.ORA_ETHUSD_FEED_BASE
   }
 };
 // Per-feed heartbeats (staleness windows). Testnet defaults are generous;
-// on mainnet set tight values via env: ETH/USD heartbeat is 1h on L1 /
-// 20 min on Base, stETH/ETH is 24h (Chainlink docs) — use heartbeat + margin.
-const ETHUSD_TIMEOUT = Number(process.env.ORA_ETHUSD_HEARTBEAT || 48 * 3600);
-const STETHETH_TIMEOUT = Number(process.env.ORA_STETHETH_HEARTBEAT || 48 * 3600);
+// production defaults to tight values (heartbeat + margin) and the oracle
+// policy caps them — env can only ever tighten on prod networks.
+const IS_PROD_NET = isProdNetwork(network.name);
+const ETHUSD_TIMEOUT = Number(process.env.ORA_ETHUSD_HEARTBEAT || (IS_PROD_NET ? 2 * 3600 : 48 * 3600));
+const STETHETH_TIMEOUT = Number(process.env.ORA_STETHETH_HEARTBEAT || (IS_PROD_NET ? 30 * 3600 : 48 * 3600));
+// Per-asset single-fetch deviation caps. The 50% lab default keeps the market
+// simulator and demos working; production clamps to <=10% (see oracle-policy).
+const ETH_DEVIATION_BPS = IS_PROD_NET
+  ? Math.min(Number(process.env.ORA_ETH_DEVIATION_BPS || 1000), 1000)
+  : Number(process.env.ORA_ETH_DEVIATION_BPS || 5000);
+const WSTETH_DEVIATION_BPS = IS_PROD_NET
+  ? Math.min(Number(process.env.ORA_WSTETH_DEVIATION_BPS || 1000), 1000)
+  : Number(process.env.ORA_WSTETH_DEVIATION_BPS || 5000);
 
 // Phase 4 — RWA branch parameters
 const RWA_ORACLE_TIMEOUT = 72 * 3600;                 // daily NAV + weekend cover
@@ -71,6 +87,10 @@ async function main() {
       console.log(`  using real Chainlink ETH/USD: ${candidate}` +
         ` ($${Number(answer) / 10 ** Number(dec)}, ${age}s old)`);
     } catch (e) {
+      if (IS_PROD_NET) {
+        throw new Error(`oracle-policy: ${network.name} primary ETH/USD probe failed at ${candidate} ` +
+          `(${e.message?.slice(0, 120)}) — refusing to deploy with a mock oracle. Set ORA_ETHUSD_FEED_BASE.`);
+      }
       console.log(`  WARNING: Chainlink ETH/USD probe failed at ${candidate} (${e.message?.slice(0, 80)})`);
       console.log("  falling back to a SettableAggregator ($2000) — override with ORA_ETHUSD_FEED to use a real feed");
       const aggEthUsd = await deploy("SettableAggregator", 8, "ETH / USD", 2000n * 10n ** 8n);
@@ -103,8 +123,11 @@ async function main() {
         sequencerFeedAddr = cand;
         console.log(`  using L2 sequencer uptime feed: ${cand} (status ${up === 0n ? "UP" : "DOWN"})`);
       } catch (e) {
+        if (IS_PROD_NET) throw new Error(`oracle-policy: ${network.name} sequencer probe failed at ${cand} — refusing prod deploy without the guard.`);
         console.log(`  WARNING: sequencer feed probe failed at ${cand} — guard disabled`);
       }
+    } else if (IS_PROD_NET) {
+      throw new Error(`oracle-policy: ${network.name} REQUIRES an L2 sequencer uptime feed — set ORA_SEQUENCER_FEED.`);
     } else {
       console.log("  no ORA_SEQUENCER_FEED set — sequencer guard disabled (fine for testnets)");
     }
@@ -115,14 +138,20 @@ async function main() {
     sequencerSettable = true;
   }
 
-  // Secondary ETH/USD source (multi-source hardening): a >50% single-fetch
+  // Secondary ETH/USD source (multi-source hardening): a large single-fetch
   // move needs confirmation from BOTH sources; the fallback serves alone when
-  // the primary is broken/stale. Public L2s: ORA_ETHUSD_FALLBACK_FEED (e.g.
-  // an API3/Pyth Chainlink-compatible adapter); local: settable mock.
+  // the primary is broken/stale. Public L2s, in precedence order:
+  //   1. ORA_ETHUSD_FALLBACK_FEED — a ready AggregatorV3-compatible adapter
+  //   2. ORA_PYTH_ADDRESS + ORA_ETHUSD_PYTH_ID — deploys PythFallbackAggregator
+  //      on the spot (its constructor probes the price pair, so a bad pair
+  //      fails the deploy instead of wiring a dead fallback)
+  // Local: settable mock. Production with neither: deploy THROWS (policy).
   let ethUsdFallbackAddr = ethers.ZeroAddress;
   let ethUsdFallbackSettable = false;
   if (REAL_FEEDS[network.name]) {
     const cand = process.env.ORA_ETHUSD_FALLBACK_FEED;
+    const pythAddr = process.env.ORA_PYTH_ADDRESS;
+    const pythId = process.env.ORA_ETHUSD_PYTH_ID;
     if (cand) {
       try {
         const probe = new ethers.Contract(cand,
@@ -130,7 +159,17 @@ async function main() {
         await probe.latestRoundData();
         ethUsdFallbackAddr = cand;
         console.log(`  using ETH/USD fallback source: ${cand}`);
-      } catch { console.log(`  WARNING: fallback feed probe failed at ${cand} — single-source mode`); }
+      } catch {
+        if (IS_PROD_NET) throw new Error(`oracle-policy: ${network.name} fallback probe failed at ${cand} — refusing single-source prod deploy.`);
+        console.log(`  WARNING: fallback feed probe failed at ${cand} — single-source mode`);
+      }
+    } else if (pythAddr && pythId) {
+      const pythAgg = await deploy("PythFallbackAggregator", pythAddr, pythId);
+      ethUsdFallbackAddr = await a(pythAgg);
+      console.log(`  using Pyth ETH/USD fallback via adapter: ${ethUsdFallbackAddr}`);
+    } else if (IS_PROD_NET) {
+      throw new Error(`oracle-policy: ${network.name} REQUIRES a fallback aggregator — ` +
+        `set ORA_ETHUSD_FALLBACK_FEED or ORA_PYTH_ADDRESS + ORA_ETHUSD_PYTH_ID.`);
     } else {
       console.log("  no ORA_ETHUSD_FALLBACK_FEED set — single-source mode (fine for testnets)");
     }
@@ -139,13 +178,24 @@ async function main() {
     ethUsdFallbackAddr = await a(aggFb);
     ethUsdFallbackSettable = true;
   }
-  const MAX_DEVIATION_BPS = 5000; // 50% single-fetch move cap (upstream Liquity philosophy)
+  // Fail-closed production oracle policy (finding 7): throws on any
+  // violation — zero fallback, loose deviation, wide heartbeat, no sequencer.
+  assertProdConfig({
+    network: network.name,
+    fallback: ethUsdFallbackAddr,
+    ethDeviationBps: ETH_DEVIATION_BPS,
+    wstethDeviationBps: WSTETH_DEVIATION_BPS,
+    ethHeartbeat: ETHUSD_TIMEOUT,
+    stethHeartbeat: STETHETH_TIMEOUT,
+    sequencer: sequencerFeedAddr,
+  });
+  if (IS_PROD_NET) console.log("  oracle-policy: PROD config compliant (fallback + 10% caps + tight heartbeats + sequencer)");
 
   const priceFeed = await deploy("ChainlinkPriceFeed",
-    ethUsdAggregatorAddr, ETHUSD_TIMEOUT, sequencerFeedAddr, ethUsdFallbackAddr, MAX_DEVIATION_BPS);
+    ethUsdAggregatorAddr, ETHUSD_TIMEOUT, sequencerFeedAddr, ethUsdFallbackAddr, ETH_DEVIATION_BPS);
   const priceFeed2 = await deploy("WstETHPriceFeed",
     ethUsdAggregatorAddr, await a(aggStEthEth), await a(wstETH),
-    ETHUSD_TIMEOUT, STETHETH_TIMEOUT, sequencerFeedAddr, MAX_DEVIATION_BPS);
+    ETHUSD_TIMEOUT, STETHETH_TIMEOUT, sequencerFeedAddr, WSTETH_DEVIATION_BPS);
 
   // Phase 4: tokenized T-bill fund (RWA). NAV per share starts at $1.05; on
   // mainnet the aggregator would be the fund administrator's NAV oracle.
@@ -198,6 +248,7 @@ async function main() {
   // sequencing lives here. One stateless deployment serves all branches.
   console.log("\n\u2014 BatchLiquidator \u2014");
   const batchLiquidator = await deploy("BatchLiquidator");
+  const troveCursor = await deploy("TroveCursor");
 
   // ---------------- Branch 1 wiring ----------------
   console.log("\n— Wiring branch 1 (ETH) —");
@@ -467,6 +518,11 @@ async function main() {
       sequencerSettable,
       ethUsdFallbackAggregator: ethUsdFallbackAddr,
       ethUsdFallbackSettable,
+      ethUsdDeviationBps: ETH_DEVIATION_BPS,
+      wstethDeviationBps: WSTETH_DEVIATION_BPS,
+      ethUsdHeartbeat: ETHUSD_TIMEOUT,
+      stethHeartbeat: STETHETH_TIMEOUT,
+      prodPolicyEnforced: IS_PROD_NET,
       orUSDToken: await a(orUSD),
       oraToken: await a(oraToken),
       oraStaking: await a(oraStaking),
@@ -474,7 +530,8 @@ async function main() {
       lockupFactory: await a(lockupFactory),
       guardian: await a(guardian),
       guardianHolder,
-      batchLiquidator: await a(batchLiquidator)
+      batchLiquidator: await a(batchLiquidator),
+      troveCursor: await a(troveCursor)
     },
     branches: {
       ETH: {
@@ -607,7 +664,8 @@ async function main() {
       leverZap: abi("LeverZap"),
       leverZapFactory: abi("LeverZapFactory"),
       guardian: abi("OraGuardian"),
-      batchLiquidator: abi("BatchLiquidator")
+      batchLiquidator: abi("BatchLiquidator"),
+      troveCursor: abi("TroveCursor")
     }
   };
 

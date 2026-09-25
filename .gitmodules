@@ -1,0 +1,3 @@
+[submodule "ora-mvp/lib/forge-std"]
+	path = ora-mvp/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

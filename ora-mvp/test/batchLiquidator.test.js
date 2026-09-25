@@ -62,8 +62,9 @@ describe("BatchLiquidator + standalone liquidate()", () => {
     const { tm, bl, aggNav, bob, alice, carol } = f;
     await aggNav.setAnswer(100500000n); // only the baits are underwater; whale safe
     const dead = "0x000000000000000000000000000000000000dEaD";
+    const orUSDAddr = await f.orUSD.getAddress();
     const tx = await bl.connect(carol).batchLiquidateTroves(
-      await tm.getAddress(), [bob.address, alice.address, dead]);
+      await tm.getAddress(), [bob.address, alice.address, dead], orUSDAddr);
     await expect(tx).to.emit(bl, "TroveLiquidationAttempted")
       .withArgs(await tm.getAddress(), bob.address, true);
     await expect(tx).to.emit(bl, "TroveLiquidationAttempted")
@@ -79,7 +80,8 @@ describe("BatchLiquidator + standalone liquidate()", () => {
     const { tm, sorted, bl, aggNav, bob, carol, dave } = f;
     void dave;
     await aggNav.setAnswer(100500000n);
-    await bl.connect(carol).liquidateTroves(await tm.getAddress(), await sorted.getAddress(), 10);
+    await bl.connect(carol).liquidateTroves(
+      await tm.getAddress(), await sorted.getAddress(), 10, await f.orUSD.getAddress());
     expect(await tm.getTroveStatus(bob.address)).to.equal(CLOSED_BY_LIQUIDATION);
     expect(await tm.getTroveStatus(carol.address)).to.equal(CLOSED_BY_LIQUIDATION);
   });
@@ -110,5 +112,64 @@ describe("BatchLiquidator + standalone liquidate()", () => {
     expect(await tm.getTCR(price)).to.be.lt(E("1.5"));
     await tm.connect(carol).liquidate(bob.address);
     expect(await tm.getTroveStatus(bob.address)).to.equal(CLOSED_BY_LIQUIDATION);
+  });
+});
+
+describe("BatchLiquidator compensation forwarding", () => {
+  it("keeper receives native + orUSD gas compensation for the sweep", async () => {
+    const f = await loadFixture(ratesFixtureSeeded);
+    const { tm, bo, sorted, agg, orUSD, bob, carol } = f;
+    await bo.connect(bob).openTroveWithRate(E("15000"), E("0.05"), Z, Z, { value: E("10") });
+    await agg.setAnswer(1200n * 10n ** 8n); // bait underwater, normal mode
+    const BL = await ethers.getContractFactory("BatchLiquidator");
+    const bl = await BL.deploy();
+    await bl.waitForDeployment();
+    const eth0 = await ethers.provider.getBalance(carol.address);
+    const orusd0 = await orUSD.balanceOf(carol.address);
+    const tx = await bl.connect(carol).liquidateTroves(
+      await tm.getAddress(), await sorted.getAddress(), 5, await orUSD.getAddress());
+    const r = await tx.wait();
+    const gasCost = r.gasUsed * r.gasPrice;
+    const eth1 = await ethers.provider.getBalance(carol.address);
+    const orusd1 = await orUSD.balanceOf(carol.address);
+    expect(await tm.getTroveStatus(bob.address)).to.equal(3n);
+    expect(eth1 - eth0 + gasCost).to.be.gt(0); // native comp arrived
+    expect(orusd1 - orusd0).to.equal(E("200")); // 200 orUSD comp arrived
+    // nothing stranded in the helper
+    expect(await ethers.provider.getBalance(await bl.getAddress())).to.equal(0n);
+    expect(await orUSD.balanceOf(await bl.getAddress())).to.equal(0n);
+  });
+});
+
+describe("BatchLiquidator sweeps", () => {
+  it("sweepETH / sweepToken recover stranded compensation", async () => {
+    const f = await loadFixture(ratesFixtureSeeded);
+    const { tm, bo, sorted, agg, orUSD, wtbill, bob, carol, dave } = f;
+    void wtbill;
+    await bo.connect(bob).openTroveWithRate(E("15000"), E("0.05"), Z, Z, { value: E("10") });
+    await agg.setAnswer(1200n * 10n ** 8n);
+    const BL = await ethers.getContractFactory("BatchLiquidator");
+    const bl = await BL.deploy();
+    await bl.waitForDeployment();
+    // route the sweep through a contract that cannot receive ETH: the
+    // auto-forward fails silently and the compensation strands in the helper
+    const NC = await ethers.getContractFactory("NonPayableCaller");
+    const nc = await NC.deploy();
+    await nc.waitForDeployment();
+    await nc.sweep(await bl.getAddress(), await tm.getAddress(),
+      await sorted.getAddress(), 5, await orUSD.getAddress());
+    expect(await tm.getTroveStatus(bob.address)).to.equal(3n);
+    expect(await ethers.provider.getBalance(await bl.getAddress())).to.be.gt(0n);
+    expect(await orUSD.balanceOf(await bl.getAddress())).to.equal(E("200"));
+    // anyone can sweep the stranded funds to a chosen recipient
+    const e0 = await ethers.provider.getBalance(dave.address);
+    await bl.sweepETH(dave.address);
+    expect(await ethers.provider.getBalance(dave.address)).to.be.gt(e0);
+    expect(await ethers.provider.getBalance(await bl.getAddress())).to.equal(0n);
+    await bl.sweepToken(await orUSD.getAddress(), dave.address);
+    expect(await orUSD.balanceOf(dave.address)).to.equal(E("200"));
+    // empty sweeps are harmless no-ops
+    await bl.sweepETH(carol.address);
+    await bl.sweepToken(await orUSD.getAddress(), carol.address);
   });
 });

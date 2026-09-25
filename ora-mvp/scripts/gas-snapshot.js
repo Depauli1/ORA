@@ -54,7 +54,7 @@ async function main() {
   console.log("— RWA branch (wmTBILL) + keeper —");
   {
     const f = await rwaFixtureSeeded(); // whale 500k/300k, SP 250k
-    const { bo, tm, sp, sorted, wtbill, aggNav, bob, carol, alice } = f;
+    const { bo, tm, sp, sorted, wtbill, aggNav, orUSD, bob, carol, alice } = f;
     for (const [s, sh] of [[bob, "12000"], [carol, "12000"]]) {
       await wtbill.connect(s).faucet(E(sh));
       await wtbill.connect(s).approve(await bo.getAddress(), ethers.MaxUint256);
@@ -71,9 +71,11 @@ async function main() {
     const bl = await BL.deploy();
     await bl.waitForDeployment();
     await snap("keeper.liquidateTroves(5)",
-      bl.connect(alice).liquidateTroves(await tm.getAddress(), await sorted.getAddress(), 5));
+      bl.connect(alice).liquidateTroves(await tm.getAddress(), await sorted.getAddress(), 5,
+        await orUSD.getAddress()));
     await snap("keeper.batchLiquidateTroves(skip-path)",
-      bl.connect(alice).batchLiquidateTroves(await tm.getAddress(), [bob.address, carol.address]));
+      bl.connect(alice).batchLiquidateTroves(await tm.getAddress(), [bob.address, carol.address],
+        await orUSD.getAddress()));
   }
 
   const solc = {

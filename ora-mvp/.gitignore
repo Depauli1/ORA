@@ -4,3 +4,5 @@ cache/
 bin/
 .secret
 .testnet-deployer.key
+coverage.json
+coverage/

@@ -1,14 +1,15 @@
-# ORA continuous integration: compile + full test suite + Slither static
-# analysis on every push. The Slither gate fails the build on high-severity
-# findings in the NEW ORA contracts (zap, WTBill, vault/router, oracles,
-# branch staking/issuance); the audited upstream Liquity core and its textual
-# parameter forks are reported informationally but do not gate (their findings
-# are upstream patterns accepted by Liquity's audits).
+# ORA continuous integration (7 jobs): Hardhat suite + Slither + Foundry
+# invariants + oracle prod-config gate + Base Sepolia fork reads + keeper
+# scan load test + Tier-3 coverage gate. The Slither gate fails the build on
+# high-severity findings in the NEW ORA contracts (zap, WTBill, vault/router,
+# oracles, branch staking/issuance); the audited upstream Liquity core and its
+# textual parameter forks are reported informationally but do not gate (their
+# findings are upstream patterns accepted by Liquity's audits).
 name: CI
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora"]
+    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
     paths-ignore:
       - "ora-mvp/.deploy-testnet-trigger"
       - "ora-mvp/app/deployment-baseSepolia.json"
@@ -86,3 +87,89 @@ jobs:
           path: |
             slither-full-report.md
             slither-full-stderr.txt
+
+  foundry:
+    name: Foundry invariant tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Invariant suites (WTBill custody, sorUSD backing)
+        run: forge test
+
+  oracle-config:
+    name: Oracle prod-config gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail closed on single-source prod config
+        run: node scripts/check-oracle-config.js
+
+  fork:
+    name: Fork tests (Base Sepolia)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - name: Fork reads against live Base Sepolia state
+        run: npx hardhat test test/fork-reads.test.js
+        env:
+          ORA_FORK_URL: ${{ secrets.ORA_FORK_RPC_URL || 'https://sepolia.base.org' }}
+
+  keeper-load:
+    name: Keeper scan load test (500 troves)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - name: Scan path at depth (fails if the cursor misses troves)
+        run: npx hardhat run scripts/loadtest-keeper-scan.js
+        env:
+          SCAN_N: "500"
+
+  coverage:
+    name: Coverage gate (Tier 3 >= 85%)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - name: Tier-3 line coverage gate
+        run: npm run coverage
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144

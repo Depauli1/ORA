@@ -11,7 +11,8 @@
     "test": "hardhat test",
     "size": "node scripts/check-sizes.js",
     "gas": "hardhat run scripts/gas-snapshot.js",
-    "gas:check": "GAS_CHECK=1 hardhat run scripts/gas-snapshot.js"
+    "gas:check": "GAS_CHECK=1 hardhat run scripts/gas-snapshot.js",
+    "coverage": "COVERAGE=1 hardhat coverage && node scripts/coverage-gate.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.2",
@@ -21,6 +22,7 @@
     "ethers": "^6.13.0",
     "hardhat": "^2.26.0",
     "solc": "0.6.11",
-    "solc-0.8": "npm:solc@^0.8.24"
+    "solc-0.8": "npm:solc@^0.8.24",
+    "solidity-coverage": "^0.8.16"
   }
 }

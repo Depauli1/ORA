@@ -1,5 +1,7 @@
 require("@nomicfoundation/hardhat-ethers");
 require("@nomicfoundation/hardhat-chai-matchers");
+// Coverage is opt-in (COVERAGE=1) so normal compile/test runs stay fast.
+if (process.env.COVERAGE === "1") require("solidity-coverage");
 
 // The sandbox blocks binaries.soliditylang.org, so we use the WASM compiler
 // from the `solc` npm package instead of letting Hardhat download solc.
@@ -100,6 +102,9 @@ module.exports = {
   networks: {
     hardhat: {
       chainId: 31337,
+      // Finding 6: fork mode for test/fork-reads.test.js (CI fork job only).
+      // ORA_FORK_URL set -> fork Base Sepolia at latest; unset -> hermetic.
+      ...(process.env.ORA_FORK_URL ? { forking: { url: process.env.ORA_FORK_URL } } : {}),
       // Pure automine: combining auto + interval mining causes an EDR race
       // where rapid tx bursts intermittently read stale nonces (NONCE_EXPIRED).
       mining: { auto: true }

@@ -122,6 +122,10 @@ re-pausing (a second pause needs a fresh multisig transaction).
 node scripts/bots/liquidator.js            # one-shot scan, all branches
 node scripts/bots/liquidator.js --watch    # continuous (ORA_POLL_SECONDS=30)
 ORA_KEEPER_KEY=0x... ORA_RPC_URL=... ORA_DEPLOYMENT=... node scripts/bots/liquidator.js --watch
+# multi-operator (finding 9): 3 keepers, disjoint shards, per-shard heartbeats
+ORA_KEEPER_SHARD=0/3 ORA_HEARTBEAT_FILE=/var/run/ora-keeper-0.json ORA_METRICS_PORT=9090 ... --watch
+ORA_KEEPER_SHARD=1/3 ORA_HEARTBEAT_FILE=/var/run/ora-keeper-1.json ORA_METRICS_PORT=9091 ... --watch
+ORA_KEEPER_SHARD=2/3 ORA_HEARTBEAT_FILE=/var/run/ora-keeper-2.json ORA_METRICS_PORT=9092 ... --watch
 ```
 The keeper prefers `liquidatePartial` inside the soft band (gentler for the
 borrower, 0.5% caller reward), falls back to full liquidation, and simulates
@@ -130,6 +134,70 @@ through the on-chain `BatchLiquidator` (`liquidateTroves(tm, sorted, n)` walks
 riskiest-first; `batchLiquidateTroves(tm, list)` takes an explicit list) —
 it skips non-liquidatable troves instead of reverting the whole sweep, and
 emits `TroveLiquidationAttempted(tm, borrower, success)` per attempt.
+
+Hardening (finding 9): stuck txs escalate +25% on the same nonce up to
+`ORA_MAX_FEE_GWEI` (skipped, never stuck, past the cap); crashes and repeated
+scan failures POST `{text}` to `ORA_ALERT_WEBHOOK`; `/metrics` + `/health`
+serve Prometheus when `ORA_METRICS_PORT` is set; a live network REFUSES to
+start without `ORA_KEEPER_KEY` (the local demo key never leaves localhost).
+Sharding is deterministic (`keccak(owner) % N`), so N keepers on separate
+infra give overlap-free coverage with zero coordination — a dead keeper's
+shard shows up as its candidates going unhandled AND its heartbeat file
+going stale (the realtime monitor pages on both). The cursor scan path is
+load-tested at 500 troves in CI (`keeper-load` job; run
+`SCAN_N=5000 npx hardhat run scripts/loadtest-keeper-scan.js` for the full
+5k characterization before mainnet).
+
+## Realtime monitor operations (finding 8)
+
+The 6h CI cron + auto-issue stays as the backstop; minute-level detection is
+the watch loop, run once per deployment host next to the keeper(s):
+
+```bash
+ORA_RPC_URL=... ORA_DEPLOYMENT=... ORA_MONITOR_POLL_SECONDS=60 \
+ORA_ALERT_WEBHOOK=https://... ORA_KEEPER_HEARTBEATS=/var/run/ora-keeper-0.json,/var/run/ora-keeper-1.json \
+node scripts/watch-invariants.js --watch
+```
+
+Each tick checks, per branch: price readability, `oracleLive`,
+`usingFallback` flips (primary broken → fallback serving), the `depegged`
+(wstETH) and `navShock` (RWA) shock flags, `sequencerUp`, TCR band crossings
+(warn < `ORA_TCR_WARN_RATIO`=1.5, crit < `ORA_TCR_CRIT_RATIO`=1.25, insolvent
+≤ 1.0), and `Redemption` events since the last tick (alerts at ≥
+`ORA_REDEMPTION_ALERT_ORUSD`=100000). It also pages when a keeper heartbeat
+file is missing or older than `ORA_KEEPER_STALE_SECONDS`=300. The first tick
+baselines silently (a restart never pages for the status quo); transitions
+alert immediately, recoveries are always announced, and sustained-bad
+conditions re-alert every `ORA_REALERT_MINUTES`=30. Keeper and monitor POST
+the same `{text}` JSON shape, so one webhook serves both (prefixes
+`[ora-keeper]` / `[ora-monitor]` tell them apart).
+
+## Third-party SaaS account steps (owner actions — code is ready)
+
+Nothing below needs repo changes: keepers/monitors speak plain HTTPS webhooks
+and Prometheus, and CI reads RPC URLs from secrets/variables.
+
+1. **Paging webhook (pick one) → `ORA_ALERT_WEBHOOK` on the keeper + monitor
+   hosts.** PagerDuty: Services → Add Integration → Events API v2, use the
+   `https://events.pagerduty.com/v2/enqueue` routing-key URL behind a tiny
+   `{text}`→event transformer (or a PagerDuty webhook receiver). Opsgenie /
+   Slack / Discord / Telegram via their incoming-webhook URLs accept the
+   `{text}` payload directly (Slack needs `{"text": ...}` — exactly our
+   shape). Test with a stale-heartbeat alert before mainnet.
+2. **Tenderly (optional second pair of eyes).** Add the deployment's
+   `ChainlinkPriceFeed` / `WstETHPriceFeed` / trove managers as watched
+   contracts; alert on `FallbackStatusChanged(true)`,
+   `DepegCircuitBreaker(true, *)`, and `Redemption` with
+   `_actualLUSDAmount ≥ 100000e18`. Route to the same paging policy as (1).
+3. **OpenZeppelin Defender (optional keeper backup).** A Sentinel on
+   `TroveUpdated`/`Redemption` anomalies plus an Autotask that runs the same
+   scan-and-liquidate logic covers a total self-hosted-keeper outage. Keep
+   the Autotask's key funded with a small ETH relayer balance.
+4. **Production RPC (`ORA_RPC_URL` on bots, `ORA_FORK_RPC_URL` Actions secret
+   for the CI fork job).** Alchemy/Infura/QuickNode paid tier on Base —
+   the public `https://sepolia.base.org` default is rate-limited and only
+   fit for testnet. CI falls back to the public endpoint when the secret is
+   unset, so set the secret before relying on fork-job signal.
 
 ## Key management posture
 

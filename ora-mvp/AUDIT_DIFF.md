@@ -86,6 +86,7 @@ valid under both compilers).
 | `branches/BranchStaking.sol` | 262 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
 | `branches/BranchCommunityIssuance.sol` | 91 | per-branch capped ORA issuance | cap locked at `activate()` |
 | `oracles/ChainlinkPriceFeed.sol` (+Reader) | 125 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
+| `oracles/PythFallbackAggregator.sol` | 74 | Pyth→AggregatorV3 adapter: the Chainlink feed's live fallback source (two-source confirm) | any-expo→8-dec scaling; zero/negative ⇒ answer 0; updatedAt=publishTime (feed heartbeat governs); ctor probe rejects unpublished/bad ids |
 | `oracles/SequencerGuard.sol` | 60 | Chainlink L2 sequencer-uptime check (answer 0=up, 1h restart grace), optional via address(0) | outage/grace ⇒ oracle down, lastGoodPrice served |
 | `oracles/WstETHPriceFeed.sol` | 155 | ETH/USD × stETH/ETH × wstETH rate; **depeg circuit breaker** <0.96; **per-feed heartbeats** + sequencer guard | breaker sticky until peg recovers; either feed stale ⇒ fallback |
 | `oracles/RWAPriceFeed.sol` | 113 | NAV oracle: **+2%/fetch upside ratchet**, break-the-buck shock flag, 72h staleness | ratchet cannot be bypassed by the view path |
@@ -125,11 +126,12 @@ valid under both compilers).
 
 ## Verification pointers
 
-- `npm test` — 88 tests incl. fuzz (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations)
-- `scripts/watch-invariants.js` — live-deployment invariant monitor (solvency, custody, SP/vault/AMM backing, debt↔supply), wired to a 6h CI cron on Base Sepolia
+- `npm test` — 161 tests incl. fuzz + invariant-driver mirrors (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations, oracle policy, keeper sharding, monitor logic)
+- `forge test` — stateful invariant campaigns (wmTBILL custody/skim, sorUSD price/backing; 256 runs × depth 24, `fail_on_revert`)
+- `scripts/watch-invariants.js` — live-deployment invariant monitor (solvency, custody, SP/vault/AMM backing, debt↔supply), 60s realtime watch + 6h CI cron backstop on Base Sepolia
 - `scripts/verify-tokenomics.js` — 47 on-chain claims (registrar renounce = prod)
 - `scripts/test-rwa-zap.js`, `scripts/smoke.js` — integration on a seeded chain
-- CI: `.github/workflows/ci.yml` — test suite + Slither (gate: no high-severity in Tier 3) + contract-size gate (22KB) + gas-snapshot regression check (>10% fails)
+- CI: `.github/workflows/ci.yml` — 7 jobs: Hardhat suite + Slither (gate: no high-severity in Tier 3) + Foundry invariants + oracle prod-config gate (fails single-source prod) + Base Sepolia fork reads + keeper scan load test + Tier-3 coverage gate (≥85%) + contract-size gate (22KB) + gas-snapshot regression check (>10% fails)
 
 ---
 

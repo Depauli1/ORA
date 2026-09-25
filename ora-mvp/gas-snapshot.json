@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-24",
+  "updated": "2026-09-25",
   "solc": {
     "0.6.11": "0.6.11",
     "0.8.24": "0.8.24"
@@ -22,7 +22,7 @@
     "rwa.provideToSP": 162917,
     "rwa.withdrawFromSP": 196607,
     "rwa.liquidatePartial": 457393,
-    "keeper.liquidateTroves(5)": 640953,
-    "keeper.batchLiquidateTroves(skip-path)": 36437
+    "keeper.liquidateTroves(5)": 637936,
+    "keeper.batchLiquidateTroves(skip-path)": 42418
   }
 }
