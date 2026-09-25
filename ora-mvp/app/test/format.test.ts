@@ -2,7 +2,7 @@
 // ratios, shortfalls) must never silently change.
 import { describe, it, expect } from "vitest";
 import { ethers } from "ethers";
-import { fmt, fmtUsd, short, icrClass, rebrand, reason, mapTransactionError } from "../src/format";
+import { fmt, fmtNum, fmtPct, fmtUsd, fmtUsdNum, short, icrClass, rebrand, reason, mapTransactionError, NUMBER_LOCALE } from "../src/format";
 import {
   isNativeBranch, isRWABranch, isRatesBranch, brMcrOf, brSoftOf,
   icrPct, openPreview, adjustmentPreviews, healthTier, healthMeterPct, healthExplanation, collSymOf, faucetAmtOf,
@@ -140,5 +140,32 @@ describe("branch selectors", () => {
   it("does not add an upfront fee to projected debt on the rates branch", () => {
     const p = adjustmentPreviews(4, 3000, 100, 1000, 0.05, true, 1.1);
     expect(p.borrow.debt).toBe(3100);
+  });
+});
+
+describe("locale-centralized number formatting", () => {
+  it("fmtNum groups and truncates without rounding up", () => {
+    expect(fmtNum(4020.505)).toBe("4,020.51");
+    expect(fmtNum(4020.504)).toBe("4,020.5");
+    expect(fmtNum(12.34567, 4)).toBe("12.3457");
+    expect(fmtNum(110, 0)).toBe("110");
+    expect(fmtNum(0.5, 1)).toBe("0.5");
+  });
+
+  it("fmtPct appends the percent sign once", () => {
+    expect(fmtPct(148.1)).toBe("148.1%");
+    expect(fmtPct(110, 0)).toBe("110%");
+    expect(fmtPct(0.6, 2)).toBe("0.6%");
+  });
+
+  it("fmtUsdNum prefixes the dollar sign", () => {
+    expect(fmtUsdNum(2000)).toBe("$2,000");
+    expect(fmtUsdNum(1741.555)).toBe("$1,741.56");
+  });
+
+  it("every helper flows through the single NUMBER_LOCALE constant", () => {
+    expect(NUMBER_LOCALE).toBe("en-US");
+    expect(fmt(ethers.parseEther("4219.5"))).toBe("4,219.5");
+    expect(fmtUsd(ethers.parseEther("2000"))).toBe("$2,000");
   });
 });

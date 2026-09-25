@@ -23,8 +23,12 @@ test("boot, live data, faucet drip, open trove", async ({ page }) => {
   await expect(page.locator("#toast")).toContainText("on the way", { timeout: 30_000 });
   await expect(page.locator("#balOra")).toContainText("100", { timeout: 30_000 });
 
-  // open a trove with the UI defaults (5 ETH / 4000 orUSD)
+  // open a trove with the UI defaults (5 ETH / 4000 orUSD): the review
+  // dialog interposes before the wallet (pre-flight + review step)
   await page.click("#btnOpen");
+  await expect(page.locator("#txReviewDialog")).toBeVisible();
+  await expect(page.locator("#reviewRows")).toContainText("Projected total debt");
+  await page.click("#reviewConfirm");
   await expect(page.locator("#toast")).toContainText("Open Trove confirmed", { timeout: 60_000 });
   await expect(page.locator("#troveActive")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#tvDebt")).toContainText("orUSD", { timeout: 30_000 });

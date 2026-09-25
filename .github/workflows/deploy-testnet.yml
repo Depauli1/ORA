@@ -13,7 +13,7 @@ name: Deploy ORA to Base Sepolia
 
 on:
   push:
-    branches: ["main", "arena/01a0d869-ora"]
+    branches: ["main", "arena/01a0d869-ora", "arena/01a0d969-ora"]
     paths: ["ora-mvp/.deploy-testnet-trigger"]
   workflow_dispatch:
 
