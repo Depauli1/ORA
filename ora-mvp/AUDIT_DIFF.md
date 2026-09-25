@@ -72,29 +72,29 @@ arithmetic (`.sub(x, msg)` underflow reverts become panic 0x11). The only
 cross-version file is `Interfaces/IOraGuardian.sol` (floating pragma,
 valid under both compilers).
 
-## Tier 3 — wholly new ORA code (highest review priority, ~1,850 lines, Solidity 0.8.24)
+## Tier 3 — wholly new ORA code (highest review priority, ~2,240 lines, Solidity 0.8.24)
 
 | File | Lines | Function | Key invariants (tested) |
 |---|---|---|---|
-| `rwa/WTBill.sol` | 167 | wmTBILL yield-share wrapper, 2%/yr linear skim to treasury | custody: `balanceOf(wrapper) == totalSupply×rate/1e18 + skimAccrued` (fuzzed); rate monotonically ↓, never 0 |
-| `rwa/WTBillPriceFeed.sol` | 59 | composite NAV × wrapper rate; proxies clamp/shock/staleness | price == navFeed × rate exactly |
-| `rates/SorUSDVault.sol` | 126 | ERC-4626-style savings vault | dead-shares (1000 → 0xdEaD) on first deposit; share price never manipulable down |
-| `rates/InterestRouter.sol` | 59 | 80/20 interest split | split is exact; one-shot wiring |
+| `rwa/WTBill.sol` | 162 | wmTBILL yield-share wrapper, 2%/yr linear skim to treasury | custody: `balanceOf(wrapper) == totalSupply×rate/1e18 + skimAccrued` (fuzzed); rate monotonically ↓, never 0 |
+| `rwa/WTBillPriceFeed.sol` | 57 | composite NAV × wrapper rate; proxies clamp/shock/staleness | price == navFeed × rate exactly |
+| `rates/SorUSDVault.sol` | 123 | ERC-4626-style savings vault | dead-shares (1000 → 0xdEaD) on first deposit; share price never manipulable down |
+| `rates/InterestRouter.sol` | 56 | 80/20 interest split | split is exact; one-shot wiring |
 | `rates/HintHelpersRates.sol` | 63 | rate-keyed hints | view-only |
-| `zap/LeverZap.sol` | 195 | per-user leverage proxy (open loop / flash-loan-free unwind / `exec` escape hatch) | owner-gated; closes fully or reverts atomically; sweeps everything to owner |
+| `zap/LeverZap.sol` | 225 | per-user leverage proxy (open loop / flash-loan-free unwind / `exec` escape hatch) | owner-gated; closes fully or reverts atomically; sweeps everything to owner |
 | `zap/OraSwapPool.sol` | 83 | demo x·y=k AMM, 0.3% fee (**testnet-only venue**) | k never decreases (fuzzed); no LP withdrawal path by design |
-| `branches/BranchStaking.sol` | 262 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
-| `branches/BranchCommunityIssuance.sol` | 91 | per-branch capped ORA issuance | cap locked at `activate()` |
-| `oracles/ChainlinkPriceFeed.sol` (+Reader) | 125 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
-| `oracles/PythFallbackAggregator.sol` | 74 | Pyth→AggregatorV3 adapter: the Chainlink feed's live fallback source (two-source confirm) | any-expo→8-dec scaling; zero/negative ⇒ answer 0; updatedAt=publishTime (feed heartbeat governs); ctor probe rejects unpublished/bad ids |
-| `oracles/SequencerGuard.sol` | 60 | Chainlink L2 sequencer-uptime check (answer 0=up, 1h restart grace), optional via address(0) | outage/grace ⇒ oracle down, lastGoodPrice served |
-| `oracles/WstETHPriceFeed.sol` | 155 | ETH/USD × stETH/ETH × wstETH rate; **depeg circuit breaker** <0.96; **per-feed heartbeats** + sequencer guard | breaker sticky until peg recovers; either feed stale ⇒ fallback |
-| `oracles/RWAPriceFeed.sol` | 113 | NAV oracle: **+2%/fetch upside ratchet**, break-the-buck shock flag, 72h staleness | ratchet cannot be bypassed by the view path |
+| `branches/BranchStaking.sol` | 241 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
+| `branches/BranchCommunityIssuance.sol` | 87 | per-branch capped ORA issuance | cap locked at `activate()` |
+| `oracles/ChainlinkPriceFeed.sol` | 140 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
+| `oracles/PythFallbackAggregator.sol` | 80 | Pyth→AggregatorV3 adapter: the Chainlink feed's live fallback source (two-source confirm) | any-expo→8-dec scaling; zero/negative ⇒ answer 0; updatedAt=publishTime (feed heartbeat governs); ctor probe rejects unpublished/bad ids |
+| `oracles/SequencerGuard.sol` | 57 | Chainlink L2 sequencer-uptime check (answer 0=up, 1h restart grace), optional via address(0) | outage/grace ⇒ oracle down, lastGoodPrice served |
+| `oracles/WstETHPriceFeed.sol` | 172 | ETH/USD × stETH/ETH × wstETH rate; **depeg circuit breaker** <0.96; **per-feed heartbeats** + sequencer guard | breaker sticky until peg recovers; either feed stale ⇒ fallback |
+| `oracles/RWAPriceFeed.sol` | 112 | NAV oracle: **+2%/fetch upside ratchet**, break-the-buck shock flag, 72h staleness | ratchet cannot be bypassed by the view path |
 | `oracles/SettableAggregator.sol` | 59 | testnet mock feed | testnet only |
-| Mocks (`MockWstETH`, `MockTBill`) | ~90 | testnet collateral faucets | testnet only |
+| Mocks (`MockWstETH`, `MockTBill`) | 117 | testnet collateral faucets | testnet only |
 | `guardian/OraGuardian.sol` (+`Interfaces/IOraGuardian.sol`) | 68 + 12 | per-branch borrowing pause: multisig holder, per-BO expiry ≤30d, one-shot wiring | pause/unpause/expiry/rotation/branch-isolation (10 tests); no other powers |
-| `keeper/BatchLiquidator.sol` | 62 | external batch liquidations (the TM forks implement singles only) | skip-on-failure = in-protocol batch semantics; holds no funds; head-walk caches `next` |
-| `dependencies08/` (7 files) | 209 | 0.8 twins of the 0.6 interfaces/deps Tier 3 needs (`IERC20`, `IPriceFeed`, `AggregatorV3Interface`, `ILQTYStaking`, `OraMath`, `OraOwnable`, `OraCheckContract`) | identical selectors/events; `_decPow` cap 525600000 preserved |
+| `keeper/BatchLiquidator.sol` | 119 | external batch liquidations (the TM forks implement singles only) | skip-on-failure = in-protocol batch semantics; holds no funds; head-walk caches `next` |
+| `dependencies08/` (7 files) | 205 | 0.8 twins of the 0.6 interfaces/deps Tier 3 needs (`IERC20`, `IPriceFeed`, `AggregatorV3Interface`, `ILQTYStaking`, `OraMath`, `OraOwnable`, `OraCheckContract`) | identical selectors/events; `_decPow` cap 525600000 preserved |
 
 ## Known accepted deviations / debt
 
@@ -128,12 +128,12 @@ valid under both compilers).
 
 ## Verification pointers
 
-- `npm test` — 161 tests incl. fuzz + invariant-driver mirrors (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations, oracle policy, keeper sharding, monitor logic)
+- `npm test` — 167 tests incl. fuzz + invariant-driver mirrors + 6 jsdom UI smoke tests (custody, k-invariant, accrual math, zap round trips, sequencer outage/grace, per-feed staleness, guardian pause matrix, standalone + batch liquidations, oracle policy, keeper sharding, monitor logic)
 - `forge test` — stateful invariant campaigns (wmTBILL custody/skim, sorUSD price/backing; 256 runs × depth 24, `fail_on_revert`)
 - `scripts/watch-invariants.js` — live-deployment invariant monitor (solvency, custody, SP/vault/AMM backing, debt↔supply), 60s realtime watch + 6h CI cron backstop on Base Sepolia
 - `scripts/verify-tokenomics.js` — 47 on-chain claims (registrar renounce = prod)
 - `scripts/test-rwa-zap.js`, `scripts/smoke.js` — integration on a seeded chain
-- CI: `.github/workflows/ci.yml` — 7 jobs: Hardhat suite + Slither (gate: no high-severity in Tier 3) + Foundry invariants + oracle prod-config gate (fails single-source prod) + Base Sepolia fork reads + keeper scan load test + Tier-3 coverage gate (≥85%) + contract-size gate (22KB) + gas-snapshot regression check (>10% fails)
+- CI: `.github/workflows/ci.yml` — 7 jobs: Hardhat suite (incl. 22KB contract-size gate + >10% gas-snapshot regression check) + Slither (gate: no high-severity in Tier 3; audited upstream filtered, full report informational) + Foundry invariants + oracle prod-config gate (fails single-source prod) + Base Sepolia fork reads + keeper scan load test + Tier-3 coverage gate (≥85%)
 
 ---
 

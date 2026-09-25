@@ -925,3 +925,7 @@ async function main() {
 }
 
 main().catch(e => toast("Init failed: " + reason(e), 10000));
+
+// Test hook (inert in production): exposes the pure network registry so the
+// jsdom suite can pin testnet/mainnet gating without a chain or wallet.
+window.__ora = window.__ora || { NETWORKS };
