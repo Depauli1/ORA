@@ -10,3 +10,11 @@ optimizer_runs = 200
 # skip empty cases), so a reverting call must fail the run, not be discarded.
 invariant = { runs = 256, depth = 24, fail_on_revert = true }
 fuzz = { runs = 512 }
+
+# Overnight campaign profile (cron: .github/workflows/fuzz-nightly.yml).
+# CI's 256×24 catches regressions in minutes; this is the deep search that
+# looks for the rare state paths. ~10k runs × depth 100 is roughly 40× the
+# state coverage per suite. Run locally: FOUNDRY_PROFILE=nightly forge test
+[profile.nightly]
+invariant = { runs = 10000, depth = 100, fail_on_revert = true }
+fuzz = { runs = 5000 }

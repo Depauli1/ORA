@@ -161,6 +161,18 @@
       committed back for the app's network switcher. Chainlink ETH/USD is probed
       on-chain at deploy time with a settable-aggregator fallback so a bad feed
       address can never brick the deploy. Runbook: `ora-mvp/DEPLOY_BASE_SEPOLIA.md`.
+- [x] **Fork-kill-zone hardening** — Tier-2 differential suite
+      (`ora-mvp/test/differential.test.js`): identical scripted + seeded-random
+      op sequences replayed on the audited v1 ETH engine and the Tier-2
+      ERC20/wstETH fork, asserting lock-step state to the wei (trove debts,
+      ICR/TCR, SP totals, orUSD supply), revert parity, and conservation
+      invariants after every op; soft-liquidation exact-MCR restoration
+      formalized with an integer mirror of the on-chain formula. Slither gate
+      re-tiered so the Tier-2 forks are no longer excluded: fork-introduced
+      HIGHs can never be triaged away, inherited HIGHs must be *mechanically
+      proven* against the audited base, MEDIUMs need written triage. Foundry
+      nightly fuzz campaign (10k runs × depth 100) on cron. Tier-3 coverage
+      gate ratcheted to 95% lines / 75% branches (measured: 98.6 / 80.1).
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 
