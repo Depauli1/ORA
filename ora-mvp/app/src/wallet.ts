@@ -5,15 +5,16 @@
 import { ethers } from "ethers";
 import { ACCOUNTS, NETWORKS } from "./config";
 import { state, provider, myAddr, req, type AppSigner, type Eip1193 } from "./state";
-import { isLocalhost } from "./wallet-gate";
+import { canUseDemo } from "./wallet-gate";
 import { connectContracts } from "./contracts";
 import { refresh } from "./views";
 import { $, select, toast } from "./dom";
-import { short, reason } from "./format";
+import { short, reason, mapTransactionError } from "./format";
+import { addActivity, updateActivity } from "./activity";
 
 export function setAccount(name: string): void {
-  if (!isLocalhost(state.hostname)) {
-    toast("Demo accounts are available on localhost only", 7000);
+  if (!canUseDemo(state.hostname, state.appConfig.previewDemo)) {
+    toast("Demo accounts are available on localhost or an explicitly enabled Arena preview only", 7000);
     return;
   }
   const key = ACCOUNTS[name];
@@ -46,8 +47,7 @@ export function initWalletDiscovery(): void {
       if (!sel) return;
       sel.innerHTML = state.discoveredWallets
         .map((w, i) => `<option value="${i}">${w.info.name}</option>`).join("");
-      sel.style.display = state.discoveredWallets.length > 1 && $("btnConnect").style.display !== "none"
-        ? "inline-block" : "none";
+      sel.hidden = state.discoveredWallets.length <= 1 || $("btnConnect").hidden;
     } catch { /* ignore malformed announcements */ }
   });
   try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch { /* ignore */ }
@@ -128,6 +128,7 @@ export function guardSigner(signer: AppSigner, prov: ethers.AbstractProvider): A
   if (signer.__oraGuarded) return signer;
   const orig = signer.sendTransaction.bind(signer);
   signer.sendTransaction = (async (txReq: ethers.TransactionRequest) => {
+    let simulationPassed = true;
     try {
       await prov.call({ ...txReq, from: signer.address });
     } catch (e: unknown) {
@@ -135,7 +136,16 @@ export function guardSigner(signer: AppSigner, prov: ethers.AbstractProvider): A
       if (e && (ee.code === "CALL_EXCEPTION" || ee.data)) {
         throw new Error("rejected in pre-flight simulation — " + reason(e));
       }
-      // anything else: let the real send decide
+      // Non-revert RPC hiccups never block a send; disclose the uncertainty.
+      simulationPassed = false;
+    }
+    if (state.activeActivityId) {
+      updateActivity(state.activeActivityId, {
+        status: "awaiting-wallet",
+        message: simulationPassed
+          ? "Simulation passed. Confirm the transaction in your wallet."
+          : "Simulation was unavailable. Review the transaction details carefully in your wallet.",
+      });
     }
     return orig(txReq);
   }) as typeof signer.sendTransaction;
@@ -144,22 +154,114 @@ export function guardSigner(signer: AppSigner, prov: ethers.AbstractProvider): A
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function tx(label: string, fn: () => Promise<any>): Promise<void> {
+export async function tx(
+  label: string,
+  fn: () => Promise<any>,
+  reconcileState: () => Promise<boolean> = refresh,
+): Promise<boolean> {
   if (!state.wallet) {
     toast("Connect a wallet first");
-    return;
+    return false;
   }
-  if (state.busy) return;
+  if (state.busy) return false;
   state.busy = true;
+  const activityId = addActivity(label, state.netMode);
+  state.activeActivityId = activityId;
+  updateActivity(activityId, {
+    status: "preparing",
+    message: "Checking protocol state and preparing the transaction…",
+  });
+  let succeeded = false;
+
+  const markConfirmed = (hash: string | undefined, reconciled: boolean): void => {
+    updateActivity(activityId, {
+      status: "confirmed",
+      hash,
+      message: reconciled
+        ? "Confirmed on-chain. Your latest position and balances have been refreshed."
+        : "Confirmed on-chain, but the latest account data could not be refreshed. The page will keep retrying.",
+    });
+    toast(reconciled
+      ? `✓ ${label} confirmed; account data updated`
+      : `✓ ${label} confirmed; account data is still refreshing`, 8000);
+  };
+
   try {
-    toast(label + " — sending transaction…", 60000);
-    const t = await fn();
-    await t.wait();
-    toast("✓ " + label + " confirmed");
-    await refresh();
+    toast(`${label} — preparing transaction…`, 60000);
+    const response = await fn();
+    if (!response || typeof response.wait !== "function") {
+      throw new Error("The wallet did not return a transaction response.");
+    }
+    const hash = typeof response.hash === "string" ? response.hash : undefined;
+    updateActivity(activityId, {
+      status: "submitted", hash,
+      message: "Transaction submitted to the network.",
+    });
+    updateActivity(activityId, {
+      status: "confirming", hash,
+      message: "Waiting for on-chain confirmation…",
+    });
+    const receipt = await response.wait();
+    if (receipt?.status === 0) throw new Error("Transaction was included but reverted.");
+
+    updateActivity(activityId, {
+      status: "processing", hash,
+      message: "Transaction confirmed. Refreshing your ORA position and balances…",
+    });
+    succeeded = true;
+    const reconciled = await reconcileState();
+    markConfirmed(hash, reconciled);
   } catch (e) {
-    toast("✗ " + label + " failed: " + reason(e), 8000);
+    const txError = e as {
+      code?: string | number;
+      cancelled?: boolean;
+      replacement?: { hash?: string };
+      receipt?: { status?: number };
+    };
+    if (txError?.code === "TRANSACTION_REPLACED") {
+      const replacedHash = txError.replacement?.hash;
+      if (txError.cancelled) {
+        updateActivity(activityId, {
+          status: "cancelled", hash: replacedHash,
+          message: "The wallet cancelled this transaction replacement.",
+          errorCode: "TRANSACTION_REPLACED_CANCELLED",
+          recovery: "No replacement was confirmed. Review recent activity before submitting again.",
+          technical: mapTransactionError(e).technical,
+        });
+        toast(`✗ ${label} cancelled in wallet`, 8000);
+      } else if (txError.receipt?.status === 1) {
+        updateActivity(activityId, {
+          status: "processing", hash: replacedHash,
+          message: "Replacement confirmed. Refreshing your ORA position and balances…",
+        });
+        succeeded = true;
+        const reconciled = await reconcileState();
+        markConfirmed(replacedHash, reconciled);
+      } else {
+        updateActivity(activityId, {
+          status: "replaced", hash: replacedHash,
+          message: "The wallet replaced this transaction. Check the linked transaction for its final status.",
+          errorCode: "TRANSACTION_REPLACED",
+          recovery: "Use the linked transaction to confirm its outcome before retrying.",
+          technical: mapTransactionError(e).technical,
+        });
+        toast("Transaction replaced — check Recent activity", 8000);
+      }
+    } else {
+      const appError = mapTransactionError(e);
+      const rejected = appError.code === "USER_REJECTED";
+      updateActivity(activityId, {
+        status: rejected ? "cancelled" : "failed",
+        message: appError.message,
+        errorCode: appError.code,
+        recovery: appError.recovery,
+        technical: appError.technical,
+      });
+      toast(`${appError.title}: ${appError.message}`, 8000);
+    }
   } finally {
+    if (state.activeActivityId === activityId) state.activeActivityId = null;
     state.busy = false;
   }
+  return succeeded;
 }

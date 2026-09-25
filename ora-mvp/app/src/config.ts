@@ -119,6 +119,7 @@ export interface Deployment {
 export interface AppConfig {
   faucet: boolean;
   walletConnectProjectId: string | null;
+  previewDemo: boolean;
 }
 
-export const DEFAULT_CONFIG: AppConfig = { faucet: false, walletConnectProjectId: null };
+export const DEFAULT_CONFIG: AppConfig = { faucet: false, walletConnectProjectId: null, previewDemo: false };

@@ -106,9 +106,9 @@ describe("server integration", () => {
   let server: http.Server;
   const appDir = path.join(__dirname, "..");
 
-  function req(method: string, p: string, body?: string): Promise<{ status: number; text: string; headers: http.IncomingHttpHeaders }> {
+  function req(method: string, p: string, body?: string, headers: http.OutgoingHttpHeaders = {}): Promise<{ status: number; text: string; headers: http.IncomingHttpHeaders }> {
     return new Promise((resolve, reject) => {
-      const r = http.request(base + p, { method }, (res) => {
+      const r = http.request(base + p, { method, headers }, (res) => {
         let t = "";
         res.on("data", (c) => (t += c));
         res.on("end", () => resolve({ status: res.statusCode || 0, text: t, headers: res.headers }));
@@ -120,7 +120,7 @@ describe("server integration", () => {
   }
 
   beforeAll(async () => {
-    server = createServer({ appDir, logToken: "t0psekret", faucetKey: "", wcProjectId: "" });
+    server = createServer({ appDir, logToken: "t0psekret", faucetKey: "", wcProjectId: "", previewDemo: true });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const addr = server.address();
     base = `http://127.0.0.1:${typeof addr === "object" ? addr?.port : 0}`;
@@ -129,10 +129,15 @@ describe("server integration", () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
-  it("GET /config reports faucet + WalletConnect availability", async () => {
-    const r = await req("GET", "/config");
-    expect(r.status).toBe(200);
-    expect(JSON.parse(r.text)).toEqual({ faucet: false, walletConnectProjectId: null });
+  it("GET /config opts the local demo into Arena preview hosts only", async () => {
+    const localHost = await req("GET", "/config");
+    expect(localHost.status).toBe(200);
+    expect(JSON.parse(localHost.text)).toEqual({ faucet: false, walletConnectProjectId: null, previewDemo: false });
+
+    const arenaHost = await req("GET", "/config", undefined, { host: "3101-sandbox123.e2b.app" });
+    expect(JSON.parse(arenaHost.text).previewDemo).toBe(true);
+    const otherHost = await req("GET", "/config", undefined, { host: "preview.example.com" });
+    expect(JSON.parse(otherHost.text).previewDemo).toBe(false);
   });
 
   it("client-error round trip: POST then loopback GET", async () => {

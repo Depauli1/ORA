@@ -2,10 +2,10 @@
 // ratios, shortfalls) must never silently change.
 import { describe, it, expect } from "vitest";
 import { ethers } from "ethers";
-import { fmt, fmtUsd, short, icrClass, rebrand, reason } from "../src/format";
+import { fmt, fmtUsd, short, icrClass, rebrand, reason, mapTransactionError } from "../src/format";
 import {
   isNativeBranch, isRWABranch, isRatesBranch, brMcrOf, brSoftOf,
-  icrPct, openPreview, collSymOf, faucetAmtOf,
+  icrPct, openPreview, adjustmentPreviews, healthTier, healthMeterPct, healthExplanation, collSymOf, faucetAmtOf,
 } from "../src/branch";
 import type { BranchCfg } from "../src/config";
 
@@ -51,6 +51,29 @@ describe("format", () => {
     expect(reason(new Error("plain"))).toBe("plain");
     expect(reason("x".repeat(500)).length).toBe(140);
   });
+
+  it("maps wallet, balance, network and contract failures to clear next steps", () => {
+    const rejected = mapTransactionError({ code: 4001, message: "User rejected the request" });
+    expect(rejected.code).toBe("USER_REJECTED");
+    expect(rejected.message).toMatch(/rejected this request/);
+    expect(rejected.recovery).toMatch(/review the action/i);
+
+    const funds = mapTransactionError({ code: "INSUFFICIENT_FUNDS", message: "insufficient funds" });
+    expect(funds.code).toBe("INSUFFICIENT_GAS_BALANCE");
+    expect(funds.message).toMatch(/estimated gas/);
+
+    const network = mapTransactionError(new Error("request timeout"));
+    expect(network.code).toBe("NETWORK_UNAVAILABLE");
+    expect(network.recovery).toMatch(/selected network/i);
+
+    const reverted = mapTransactionError({
+      code: "CALL_EXCEPTION",
+      info: { error: { message: "reverted with reason string 'LUSD: below MCR'" } },
+    });
+    expect(reverted.code).toBe("PROTOCOL_REJECTED");
+    expect(reverted.message).toBe("orUSD: below MCR");
+    expect(reverted.technical).toContain("CALL_EXCEPTION");
+  });
 });
 
 describe("branch selectors", () => {
@@ -71,6 +94,18 @@ describe("branch selectors", () => {
     expect(brSoftOf(ethBranch({ mcr: 1.05, softFloor: 1.03 }))).toBe(1.03);
   });
 
+  it("classifies projected health with the branch MCR and safe buffer", () => {
+    expect(healthTier(109.9, 1.1)).toBe("critical");
+    expect(healthTier(150, 1.1)).toBe("caution");
+    expect(healthTier(164.9, 1.1)).toBe("caution");
+    expect(healthTier(165, 1.1)).toBe("safe");
+    expect(healthTier(0, 1.1)).toBe("critical");
+    expect(healthTier(Number.NaN, 1.1)).toBe("unknown");
+    expect(healthMeterPct(165, 1.1)).toBe(100);
+    expect(healthMeterPct(110, 1.1)).toBeCloseTo(66.6667, 3);
+    expect(healthExplanation("caution", 130, 1.1, 1000, 2000)).toMatch(/collateral-price decline/);
+  });
+
   it("icrPct guards zero debt", () => {
     expect(icrPct(5, 4000, 2000)).toBeCloseTo(250, 6);
     expect(icrPct(5, 0, 2000)).toBe(0);
@@ -82,5 +117,28 @@ describe("branch selectors", () => {
     expect(p.totalDebt).toBeCloseTo(4220, 6);
     expect(p.icr).toBeCloseTo((5 * 2000) / 4220 * 100, 6);
     expect(openPreview(0, 0, 0n, 0).icr).toBe(0);
+  });
+
+  it("previews collateral/debt adjustments and blocks actions that breach MCR", () => {
+    const p = adjustmentPreviews(4, 3000, 0.5, 1000, 0.01, false, 1.1);
+    expect(p.add.collateral).toBe(4.5);
+    expect(p.withdraw.collateral).toBe(3.5);
+    expect(p.borrow.debt).toBeCloseTo(3000.505, 6);
+    expect(p.repay.debt).toBe(2999.5);
+    expect(p.withdraw.healthSafe).toBe(true);
+
+    const risky = adjustmentPreviews(2, 2500, 0.1, 1000, 0.01, false, 1.1);
+    expect(risky.withdraw.executable).toBe(false);
+    expect(risky.borrow.executable).toBe(false);
+    // Adding collateral and repaying remain available even if they don't
+    // immediately restore the position above MCR.
+    expect(risky.add.executable).toBe(true);
+    expect(risky.repay.executable).toBe(true);
+    expect(risky.repay.healthSafe).toBe(false);
+  });
+
+  it("does not add an upfront fee to projected debt on the rates branch", () => {
+    const p = adjustmentPreviews(4, 3000, 100, 1000, 0.05, true, 1.1);
+    expect(p.borrow.debt).toBe(3100);
   });
 });

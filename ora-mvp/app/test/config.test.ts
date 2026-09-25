@@ -2,7 +2,7 @@
 // chain ids pinned (a wrong chain id would connect wallets to the wrong net).
 import { describe, it, expect } from "vitest";
 import { NETWORKS, ACCOUNTS, Z } from "../src/config";
-import { isLocalhost } from "../src/wallet-gate";
+import { canUseDemo, isArenaPreview, isLocalhost } from "../src/wallet-gate";
 
 describe("network registry", () => {
   it("local is a localhost demo net", () => {
@@ -34,5 +34,14 @@ describe("localhost gate", () => {
   });
   it.each(["example.com", "192.168.1.2", "localhost.evil.com", "", "3000-xyz.e2b.app"])("denies %s", (h) => {
     expect(isLocalhost(h)).toBe(false);
+  });
+
+  it("allows only an opted-in port-prefixed Arena preview host for remote demos", () => {
+    expect(isArenaPreview("3101-sandbox123.e2b.app")).toBe(true);
+    expect(isArenaPreview("sandbox123.e2b.app")).toBe(false);
+    expect(isArenaPreview("3101-sandbox123.e2b.app.evil.com")).toBe(false);
+    expect(canUseDemo("3101-sandbox123.e2b.app", false)).toBe(false);
+    expect(canUseDemo("3101-sandbox123.e2b.app", true)).toBe(true);
+    expect(canUseDemo("example.com", true)).toBe(false);
   });
 });

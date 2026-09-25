@@ -28,6 +28,25 @@ test("boot, live data, faucet drip, open trove", async ({ page }) => {
   await expect(page.locator("#toast")).toContainText("Open Trove confirmed", { timeout: 60_000 });
   await expect(page.locator("#troveActive")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#tvDebt")).toContainText("orUSD", { timeout: 30_000 });
+  await expect(page.locator("#activityList")).toContainText("Open Trove");
+  await expect(page.locator(".activity-item").first().locator(".activity-badge")).toHaveText("Confirmed");
 
   expect(errors).toEqual([]);
+});
+
+test("mobile navigation stays within the viewport and switches focused sections", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  await expect(page.locator("#networkBadge")).toHaveText("Local demo", { timeout: 30_000 });
+  await expect(page.locator("#appContent")).toBeVisible();
+
+  const dimensions = await page.evaluate(() => ({
+    width: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.width);
+
+  await page.getByRole("button", { name: "Earn" }).click();
+  await expect(page.locator("#viewEarn")).toBeVisible();
+  await expect(page.locator("#viewBorrow")).toBeHidden();
 });

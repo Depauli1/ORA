@@ -1,27 +1,84 @@
 // Network switching + runtime config. Local demo mode additionally requires
-// loopback (defense in depth: demo keys must never render on a public host,
-// even if someone serves this build with a deployment.json present).
+// loopback (defense in depth: demo keys must never render on a public host).
 import { ethers } from "ethers";
 import { NETWORKS, DEFAULT_CONFIG } from "./config";
-import { state, req, bcfg, isRWA } from "./state";
-import { isLocalhost } from "./wallet-gate";
+import { state, req, isRWA, bcfg } from "./state";
+import type { Deployment } from "./config";
+import { canUseDemo } from "./wallet-gate";
 import { setAccount } from "./wallet";
 import { setBranch, refresh } from "./views";
-import { $, select, toast } from "./dom";
-import { reason } from "./format";
+import { $, select } from "./dom";
+import { renderActivity } from "./activity";
 
 export async function loadConfig(): Promise<void> {
   try {
     const r = await fetch("/config");
     if (!r.ok) throw new Error("status " + r.status);
-    const j = (await r.json()) as { faucet?: unknown; walletConnectProjectId?: unknown };
+    const j = (await r.json()) as { faucet?: unknown; walletConnectProjectId?: unknown; previewDemo?: unknown };
     state.appConfig = {
       faucet: !!j.faucet,
       walletConnectProjectId: typeof j.walletConnectProjectId === "string" ? j.walletConnectProjectId : null,
+      previewDemo: j.previewDemo === true,
     };
   } catch {
     state.appConfig = { ...DEFAULT_CONFIG }; // old server / file:// — degrade gracefully
   }
+}
+
+function setNetworkBadge(mode: string, status: "loading" | "ready" | "unavailable"): void {
+  const net = NETWORKS[mode] || NETWORKS.local;
+  const badge = $("networkBadge");
+  badge.dataset.status = status;
+  badge.dataset.environment = net.local ? "local" : net.testnet ? "testnet" : "mainnet";
+  badge.textContent = status === "loading"
+    ? `Loading ${net.label}…`
+    : status === "unavailable"
+      ? `${net.label} · unavailable`
+      : net.local ? "Local demo" : `${net.label} · ${net.testnet ? "testnet" : "mainnet"}`;
+}
+
+function showNetworkNotice(message: string, kind: "loading" | "error"): void {
+  const notice = $("networkNotice");
+  notice.hidden = false;
+  notice.dataset.kind = kind;
+  notice.textContent = message;
+}
+
+function hideNetworkNotice(): void {
+  $("networkNotice").hidden = true;
+}
+
+function renderBranchOptions(deployment: Deployment): string | undefined {
+  const branchSelect = select("branchSelect");
+  branchSelect.replaceChildren();
+  const labels: Record<string, string> = {
+    ETH: "ETH · interest-free",
+    wstETH: "wstETH",
+    tBILL: "wmTBILL · RWA",
+    ETHv2: "ETH · custom rates",
+  };
+  for (const [key, branch] of Object.entries(deployment.branches)) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = labels[key] || branch.collSymbol || key;
+    branchSelect.appendChild(option);
+  }
+  const names = Object.keys(deployment.branches);
+  const picker = $("branchPicker");
+  picker.hidden = names.length <= 1;
+  return names.includes("ETH") ? "ETH" : names[0];
+}
+
+function validateDeployment(deployment: Deployment, mode: string): string | null {
+  if (!deployment || !deployment.branches || !deployment.abis || !deployment.shared) {
+    return "The published deployment file is incomplete. Please try again later or contact the ORA team.";
+  }
+  const expected = NETWORKS[mode]?.chainIdHex;
+  if (expected && deployment.chainId !== undefined && deployment.chainId !== parseInt(expected, 16)) {
+    return `Deployment chain ID does not match ${NETWORKS[mode].label}; transactions have been disabled for safety.`;
+  }
+  if (Object.keys(deployment.branches).length === 0) return "This deployment has no collateral markets configured.";
+  return null;
 }
 
 export function updateSimControls(): void {
@@ -29,64 +86,107 @@ export function updateSimControls(): void {
   document.querySelectorAll("#priceRow button, #priceRow input").forEach((el) => {
     (el as HTMLButtonElement).disabled = !settable;
   });
-  $("simNote").style.display = settable || isRWA() ? "none" : "inline";
+  $("simNote").hidden = settable || isRWA();
+}
+
+function unavailable(mode: string, message: string): void {
+  state.networkReady = false;
+  state.provider = null;
+  state.wallet = null;
+  state.dep = null;
+  state.C = {};
+  state.position = null;
+  state.price = 0;
+  state.nativeBalance = 0n;
+  state.collateralBalance = 0n;
+  state.orUsdBalance = 0n;
+  state.borrowingRate = 0n;
+  state.oracleLive = null;
+  state.navShock = false;
+  state.recoveryMode = false;
+  $("appContent").hidden = true;
+  setNetworkBadge(mode, "unavailable");
+  showNetworkNotice(message, "error");
 }
 
 export async function setNetwork(mode: string): Promise<void> {
+  const selected = NETWORKS[mode] ? mode : "local";
+  const net = NETWORKS[selected];
+  state.netMode = selected;
+  state.networkReady = false;
+  state.provider = null;
+  state.wallet = null;
+  state.dep = null;
+  state.C = {};
+  state.position = null;
+  state.price = 0;
+  state.nativeBalance = 0n;
+  state.collateralBalance = 0n;
+  state.orUsdBalance = 0n;
+  state.borrowingRate = 0n;
+  state.oracleLive = null;
+  state.navShock = false;
+  state.recoveryMode = false;
+  state.lastRefreshAt = null;
+  state.lastRefreshError = null;
+  $("appContent").hidden = true;
+  select("networkSelect").value = selected;
+  setNetworkBadge(selected, "loading");
+  showNetworkNotice(`Loading ${net.label} deployment…`, "loading");
+
+  if (net.local && !canUseDemo(state.hostname, state.appConfig.previewDemo)) {
+    unavailable(selected, "The local demo chain is only available on localhost or an explicitly enabled Arena preview. Choose a published network, or open the app locally to use the demo.");
+    return;
+  }
+
   try {
-    const net = NETWORKS[mode] || NETWORKS.local;
-    if (!net.local) {
-      const r = await fetch(net.file + "?ts=" + Date.now());
-      if (!r.ok) {
-        toast(net.label + " not deployed yet — run the deployment runbook, commit " + net.file + ", and reload.", 9000);
-        select("networkSelect").value = state.netMode;
-        return;
-      }
-      state.dep = await r.json();
-      state.netMode = mode;
-      state.provider = new ethers.JsonRpcProvider(req(net.rpc, "rpc url"), parseInt(req(net.chainIdHex, "chainIdHex"), 16), { staticNetwork: true });
-      state.wallet = null;
-      $("accountSelect").style.display = "none";
-      $("btnConnect").style.display = "inline-block";
-      $("addr").textContent = "read-only — connect a wallet to transact";
-    } else {
-      if (!isLocalhost(state.hostname)) {
-        toast("Local demo chain is available on localhost only", 8000);
-        select("networkSelect").value = state.netMode;
-        return;
-      }
-      state.dep = await (await fetch(net.file + "?ts=" + Date.now())).json();
-      state.netMode = mode;
-      state.provider = new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true });
-      $("accountSelect").style.display = "inline-block";
-      $("btnConnect").style.display = "none";
+    const response = await fetch(net.file + "?ts=" + Date.now());
+    if (!response.ok) {
+      unavailable(selected,
+        `${net.label} does not have a published ORA deployment in this app build. No protocol actions are available on this network yet.`);
+      return;
     }
-    // The ORA faucet is a server-side drip, offered only on the local chain
-    // when the server holds a faucet key (see faucet.ts).
+    const deployment = await response.json() as Deployment;
+    const validationError = validateDeployment(deployment, selected);
+    if (validationError) {
+      unavailable(selected, validationError);
+      return;
+    }
+
+    state.dep = deployment;
+    state.provider = net.local
+      ? new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true })
+      : new ethers.JsonRpcProvider(req(net.rpc, "rpc url"), parseInt(req(net.chainIdHex, "chainIdHex"), 16), { staticNetwork: true });
+
+    const branch = renderBranchOptions(deployment);
+    if (!branch) {
+      unavailable(selected, "This deployment has no collateral markets configured.");
+      return;
+    }
+
     const faucetOn = net.local && state.appConfig.faucet;
     ( $("btnFaucet") as HTMLButtonElement).disabled = !faucetOn;
-    $("faucetRow").style.display = faucetOn ? "" : "none";
-    // WalletConnect covers mobile on public nets (local dev uses demo keys).
-    $("btnWC").style.display = !net.local && state.appConfig.walletConnectProjectId ? "inline-block" : "none";
+    $("faucetRow").hidden = !faucetOn;
+    $("btnWC").hidden = net.local || !state.appConfig.walletConnectProjectId;
+    $("btnConnect").textContent = "Connect wallet";
+    $("btnConnect").hidden = net.local;
+    $("walletSelect").hidden = net.local || state.discoveredWallets.length <= 1;
+    $("accountSelect").hidden = !net.local;
+    if (!net.local) $("addr").textContent = "Read-only · connect a wallet to transact";
 
-    // Guard against stale/partial deployment files (e.g. cached from an older
-    // phase, or a public deployment made before newer branches existed).
-    const dep = state.dep;
-    if (!dep || !dep.branches || !dep.abis || !dep.shared) {
-      throw new Error("deployment file is invalid or from an old build — hard-refresh the page (Ctrl/Cmd+Shift+R)");
-    }
-    // Only show tabs for branches this deployment actually has
-    document.querySelectorAll<HTMLElement>(".tab").forEach((t) =>
-      (t.style.display = dep.branches[t.dataset.branch || ""] ? "" : "none"));
-    if (!dep.branches[state.branch]) state.branch = Object.keys(dep.branches)[0];
-
-    // Keep the selector in sync on success (boot may land on a non-default
-    // network; failure paths above already restore the previous value).
-    select("networkSelect").value = state.netMode;
+    // The app only shows actions after a validated deployment and matching
+    // provider have been configured. A failed refresh remains visible/stale.
+    state.networkReady = true;
+    setNetworkBadge(selected, "ready");
+    hideNetworkNotice();
+    $("appContent").hidden = false;
+    select("branchSelect").value = branch;
     if (net.local) setAccount(select("accountSelect").value);
-    setBranch(dep.branches.ETH ? "ETH" : Object.keys(dep.branches)[0]);
+    setBranch(branch);
+    renderActivity();
     await refresh();
   } catch (e) {
-    toast("Network switch failed: " + reason(e), 8000);
+    const message = e instanceof Error ? e.message : String(e);
+    unavailable(selected, `Could not load ${net.label}: ${message}`);
   }
 }

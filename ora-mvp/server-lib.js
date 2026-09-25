@@ -61,6 +61,13 @@ function isLoopbackIp(ip) {
   return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
 }
 
+// Arena preview hosts have a port-prefixed sandbox hostname. Keep this
+// narrow and separate from loopback checks; the server must also opt in.
+function isArenaPreviewHost(host) {
+  const h = String(host || "").trim().toLowerCase().replace(/:\d+$/, "");
+  return /^\d+-[a-z0-9][a-z0-9-]*\.e2b\.app$/.test(h);
+}
+
 // --- ops-log auth: loopback is open (local dev), remote needs LOG_TOKEN ---
 function logAccess(req, logToken) {
   if (isLoopbackIp(req.socket?.remoteAddress || "")) return true;
@@ -109,6 +116,6 @@ function cacheControl(urlPath) {
 }
 
 module.exports = {
-  createRateLimiter, readBody, clientIp, isLoopbackIp, logAccess,
+  createRateLimiter, readBody, clientIp, isLoopbackIp, isArenaPreviewHost, logAccess,
   buildCSP, securityHeaders, cacheControl, DEFAULT_CONNECT,
 };

@@ -1,8 +1,9 @@
 # Deploys the ORA protocol to Base Sepolia from CI (the dev sandbox cannot
 # reach public RPCs, so GitHub's runners are the deploy machine).
 #
-# Trigger: push any change to ora-mvp/.deploy-testnet-trigger on this branch.
-# Gate:    fails fast with funding instructions while the deployer is unfunded.
+# Trigger: push a change to ora-mvp/.deploy-testnet-trigger on main/the Arena
+#          session branch, or manually dispatch after this workflow is merged.
+# Gate:    funding preflight, manifest/address/bytecode checks, protocol invariants.
 # Output:  commits ora-mvp/app/deployment-baseSepolia.json back to the branch —
 #          the ORA web app's "Base Sepolia" network switch reads that file.
 #
@@ -12,8 +13,9 @@ name: Deploy ORA to Base Sepolia
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
+    branches: ["main", "arena/01a0d869-ora"]
     paths: ["ora-mvp/.deploy-testnet-trigger"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -30,6 +32,7 @@ jobs:
         working-directory: ora-mvp
     env:
       ORA_DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+      ORA_RPC_URL: ${{ vars.ORA_RPC_URL || 'https://sepolia.base.org' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check deployer funding (fails with faucet instructions if unfunded)
+      - name: Preflight deployer key, Base Sepolia RPC, and balance
         run: node scripts/check-deployer.js
 
       - name: Compile contracts
@@ -55,6 +58,16 @@ jobs:
 
       - name: Seed first troves + pools (adaptive, non-fatal)
         run: npx hardhat run scripts/seed-public.js --network baseSepolia || echo "::warning::seed incomplete — fund the deployer further and re-trigger"
+
+      - name: Validate manifest, deterministic addresses, and on-chain bytecode
+        run: |
+          node scripts/check-public-deployment.js app/deployment-baseSepolia.json
+          node scripts/check-addresses.js app/deployment-baseSepolia.json
+
+      - name: Gate deployment on protocol invariants
+        env:
+          ORA_DEPLOYMENT: app/deployment-baseSepolia.json
+        run: node scripts/watch-invariants.js
 
       - name: Commit deployment artifacts back to the branch
         working-directory: .

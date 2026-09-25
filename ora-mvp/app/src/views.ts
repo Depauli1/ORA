@@ -4,74 +4,153 @@
 import { ethers } from "ethers";
 import { Z, GAS_COMP, NETWORKS } from "./config";
 import {
-  state, dep, bcfg, provider, myAddr,
+  state, dep, bcfg, provider, myAddr, hasFreshMarketData, MAX_MARKET_DATA_AGE_MS,
   isNative, isRWA, isRates, collSym, faucetAmt, brMcr, brSoft,
 } from "./state";
 import { myZap, connectContracts } from "./contracts";
 import { tx } from "./wallet";
 import { updateSimControls } from "./network";
-import { $, input, button, toast } from "./dom";
-import { fmt, fmtUsd, short, icrClass } from "./format";
+import { $, input, button } from "./dom";
+import { fmt, fmtUsd, short, icrClass, reason } from "./format";
+import {
+  adjustmentPreviews, healthExplanation, healthMeterPct, healthTier,
+  openPreview as calculateOpenPreview,
+} from "./branch";
+
+export function setView(name: string): void {
+  const valid = ["borrow", "earn", "markets"].includes(name) ? name : "borrow";
+  document.querySelectorAll<HTMLElement>("[data-view-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.viewPanel !== valid;
+    panel.classList.toggle("is-active", !panel.hidden);
+  });
+  document.querySelectorAll<HTMLButtonElement>("button[data-view]").forEach((nav) => {
+    const active = nav.dataset.view === valid;
+    nav.classList.toggle("is-active", active);
+    nav.setAttribute("aria-pressed", String(active));
+  });
+  if (valid === "markets") void refreshMarketsTable();
+}
 
 export function setBranch(name: string): void {
   const d = dep();
   if (!d || !d.branches) return;
   if (!d.branches[name]) name = Object.keys(d.branches)[0];
   state.branch = name;
-  document.querySelectorAll<HTMLElement>(".tab").forEach((t) =>
-    t.classList.toggle("active", t.dataset.branch === name));
+  const branchSelect = document.getElementById("branchSelect") as HTMLSelectElement | null;
+  if (branchSelect && branchSelect.value !== name) branchSelect.value = name;
   document.querySelectorAll<HTMLElement>(".collsym").forEach((el) => (el.textContent = collSym()));
+  updateAssetMarks();
   applyBranchVisibility();
   connectContracts();
 }
 
+function updateAssetMarks(): void {
+  const symbol = collSym();
+  const mark = /bill/i.test(symbol) ? "T" : /wst/i.test(symbol) ? "w" : "Ξ";
+  for (const id of ["borrowTokenMark", "openCollMark", "adjCollMark"]) {
+    const element = document.getElementById(id);
+    if (!element) continue;
+    element.textContent = mark;
+    element.dataset.asset = /bill/i.test(symbol) ? "tbill" : /wst/i.test(symbol) ? "wsteth" : "eth";
+  }
+  const symbolLabel = document.getElementById("openCollSymbol");
+  if (symbolLabel) symbolLabel.textContent = symbol;
+}
+
+function updateHealthMeter(
+  meterId: string,
+  fillId: string,
+  badgeId: string,
+  icr: number,
+  mcr: number,
+  tier: ReturnType<typeof healthTier> = healthTier(icr, mcr),
+): void {
+  const meter = $(meterId);
+  const fill = $(fillId);
+  const badge = $(badgeId);
+  const max = mcr * 150;
+  meter.dataset.risk = tier;
+  meter.setAttribute("aria-valuemin", "0");
+  meter.setAttribute("aria-valuemax", displayEstimate(max, 0));
+  meter.setAttribute("aria-valuenow", displayEstimate(Math.min(Math.max(icr, 0), max), 1));
+  meter.setAttribute("aria-valuetext", tier === "unknown"
+    ? "Waiting for valid market and position data"
+    : `${tier} · ${displayEstimate(icr, 1)}% collateral ratio; minimum ${displayEstimate(mcr * 100, 0)}%`);
+  fill.style.width = `${healthMeterPct(icr, mcr)}%`;
+  badge.dataset.risk = tier;
+  badge.textContent = tier === "safe" ? "Safe" : tier === "caution" ? "Caution" : tier === "critical" ? "Critical" : "Waiting";
+}
+
+function updatePositionHealth(): void {
+  if (!state.position) return;
+  const collateral = Number(ethers.formatEther(state.position.collateral));
+  const debt = Number(ethers.formatEther(state.position.debt));
+  const icr = state.price > 0 && debt > 0 ? collateral * state.price / debt * 100 : Number.NaN;
+  const liquidationPrice = collateral > 0 ? debt * brMcr() / collateral : 0;
+  const tier = healthTier(icr, brMcr());
+  const blocked = riskIncreaseBlockMessage();
+  updateHealthMeter(
+    "positionHealthMeter", "positionHealthFill", "positionHealthBadge", icr, brMcr(),
+    blocked ? "unknown" : tier,
+  );
+  $("tvIcr").textContent = Number.isFinite(icr) ? `${icr.toFixed(1)}%` : "—";
+  $("tvIcr").className = blocked || !Number.isFinite(icr) ? "warn" : icrClass(icr, brMcr() * 100);
+  $("positionRiskMessage").textContent = blocked
+    ? `${Number.isFinite(icr) ? `Last-known ratio ${displayEstimate(icr, 1)}%. ` : "Current ratio unavailable. "}${blocked} Risk-increasing actions are paused until the data is healthy.`
+    : healthExplanation(tier, icr, brMcr(), liquidationPrice, state.price);
+  if (blocked) $("positionHealthBadge").textContent = "Check data";
+}
+
 function applyBranchVisibility(): void {
   const testnet = NETWORKS[state.netMode].testnet;
-  // Mock-collateral faucets exist only on testnets
-  $("btnWstFaucet").style.display = !isNative() && testnet ? "inline-block" : "none";
+  // Mock-collateral faucets exist only on testnets.
+  $("btnWstFaucet").hidden = isNative() || !testnet;
   $("btnWstFaucet").textContent = `Get ${Number(faucetAmt()).toLocaleString("en-US")} test ${collSym()}`;
-  $("balWst").style.display = isNative() ? "none" : "inline";
-  // Market/oracle simulators are testnet tooling — never shown on mainnet
-  $("simTools").style.display = testnet ? "" : "none";
-  $("simTitle").textContent = testnet ? "Market Simulator" : "Risky Troves";
-  $("simSub").textContent = testnet
-    ? "testnet oracle control — crash the market, run liquidations"
-    : `troves nearest liquidation — anyone can liquidate below ${(brMcr() * 100).toFixed(0)}%`;
+  $("balWst").hidden = isNative();
+  // Market/oracle simulators are explicitly disclosed testnet tools.
+  $("simTools").hidden = !testnet;
+  $("simTitle").textContent = "Testnet market simulator";
+  $("simSub").textContent = "Developer-only oracle controls; not available on mainnet.";
+  $("riskSub").textContent = testnet
+    ? `Nearest liquidation risk for ${collSym()} collateral; simulator is testnet-only.`
+    : `Troves nearest liquidation below ${(brMcr() * 100).toFixed(0)}% for ${collSym()} collateral.`;
   const { C } = state;
-  $("depegRow").style.display = testnet && !isNative() && bcfg().stEthEthAggregator ? "flex" : "none";
-  $("seqRow").style.display = testnet && C.aggSeq && !isRWA() ? "flex" : "none";
-  $("navRow").style.display = testnet && isRWA() ? "flex" : "none";
-  $("priceRow").style.display = !testnet || isRWA() ? "none" : "flex";
-  // Rates-engine UI (ETH v2 branch)
+  $("depegRow").hidden = !(testnet && !isNative() && bcfg().stEthEthAggregator);
+  $("seqRow").hidden = !(testnet && C.aggSeq && !isRWA());
+  $("navRow").hidden = !(testnet && isRWA());
+  $("priceRow").hidden = !testnet || isRWA();
+  $("simNote").hidden = !!bcfg().ethUsdSettable || isRWA();
+  // Rates-engine features stay in the relevant market and are progressively disclosed.
   const rates = isRates();
-  $("rateField").style.display = rates ? "" : "none";
-  $("rateKv").style.display = rates ? "" : "none";
-  $("rateAdjustRow").style.display = rates ? "" : "none";
-  $("btnRate").style.display = rates ? "inline-block" : "none";
-  $("sorusdCard").style.display = rates ? "" : "none";
-  $("leverCard").style.display = rates && bcfg().leverZapFactory ? "" : "none";
-  $("troveHint").innerHTML = rates
-    ? 'borrow orUSD against <b class="collsym">ETH</b> · pay the rate <b>you</b> choose'
-    : 'borrow orUSD against <b class="collsym">' + collSym() + '</b> · 0% interest';
+  $("rateField").hidden = !rates;
+  $("rateKv").hidden = !rates;
+  $("rateAdjustRow").hidden = !rates;
+  $("btnRate").hidden = !rates;
+  $("sorusdCard").hidden = !rates;
+  $("leverCard").hidden = !(rates && !!bcfg().leverZapFactory);
+  $("troveHint").textContent = rates
+    ? "Pay the annual interest rate you choose on borrowed orUSD."
+    : "Borrow orUSD against your collateral · 0% interest on this market.";
   $("redeemHint").textContent = rates
-    ? "Rate-ordered: redeems against the LOWEST-interest-rate troves first — paying a higher rate is redemption protection. Fee: 0.5% floor + rate. Disabled during the 14-day bootstrap period."
-    : "Redeems against the lowest-collateral troves at face value, minus the redemption fee (0.5% floor + rate). Disabled during the 14-day bootstrap period after launch.";
-  $("stFeeLabel").textContent = rates ? "Avg Borrow Rate" : "Borrow Fee";
-  // sensible open-trove defaults per collateral
+    ? "Redemptions start with the lowest-interest-rate Troves. A higher rate may provide more redemption protection. Fees and availability vary with system conditions."
+    : "Redemptions start with the lowest-collateral Troves. Fees and availability vary with system conditions.";
+  $("stFeeLabel").textContent = rates ? "Average borrow rate" : "Borrow fee";
+  // Familiar starting values for each collateral type.
   const defs = isRWA() ? ["10000", "5000"] : isNative() ? ["5", "4000"] : ["6", "6000"];
   input("openColl").value = defs[0];
   input("openDebt").value = defs[1];
   updateSimControls();
 }
 
-export async function refresh(): Promise<void> {
+export async function refresh(): Promise<boolean> {
+  if (!state.networkReady || !state.dep || !state.provider) return false;
   const { C } = state;
   try {
     const me = myAddr();
     const p = await C.priceFeed.getPrice();
     const [tcr, recovery, supply, nTroves, spTotal, rate,
            ethBal, orusdBal, oraBal, wstBal, trove, entire,
-           spDep, spEth, spOra, stake, stkEth, stkOrusd,
+           spDep, spEth, spOra, stake, totalStaked, stkEth, stkOrusd,
            oracleLive, stRate, navShock] = await Promise.all([
       C.troveManager.getTCR(p),
       C.troveManager.checkRecoveryMode(p),
@@ -89,17 +168,35 @@ export async function refresh(): Promise<void> {
       C.stabilityPool.getDepositorETHGain(me),
       C.stabilityPool.getDepositorLQTYGain(me),
       C.staking.stakes(me),
+      C.staking.totalLQTYStaked(),
       C.staking.getPendingETHGain(me),
       C.staking.getPendingLUSDGain(me),
       C.priceFeed.oracleLive(),
       C.aggRate ? C.priceFeed.getStEthEthRate() : [0n, true],
       isRWA() ? C.priceFeed.navShock() : false
     ]);
-    void oracleLive; void navShock;
 
     state.price = Number(ethers.formatEther(p));
+    state.borrowingRate = rate;
+    state.nativeBalance = state.wallet ? ethBal : 0n;
+    state.collateralBalance = state.wallet ? (C.collToken ? wstBal : ethBal) : 0n;
+    state.orUsdBalance = state.wallet ? orusdBal : 0n;
+    state.position = trove.status === 1n
+      ? { collateral: entire[1] as bigint, debt: entire[0] as bigint }
+      : null;
+    state.oracleLive = Boolean(oracleLive);
+    state.navShock = Boolean(navShock);
+    state.recoveryMode = Boolean(recovery);
+    state.lastRefreshError = null;
 
     $("stEthPrice").textContent = fmtUsd(p);
+    $("borrowMarketPrice").textContent = fmtUsd(p) + (isRWA() ? " NAV-linked" : "");
+    $("openCollBalance").textContent = state.wallet ? `${fmt(state.collateralBalance, 4)} ${collSym()}` : "Connect wallet";
+    $("adjCollBalance").textContent = state.wallet ? `${fmt(state.collateralBalance, 4)} ${collSym()}` : "Connect wallet";
+    $("adjDebtBalance").textContent = state.wallet ? `${fmt(state.orUsdBalance)} orUSD` : "Connect wallet";
+    button("btnOpenCollMax").disabled = !state.wallet || state.collateralBalance <= 0n;
+    button("btnAdjCollMax").disabled = !state.wallet || state.collateralBalance <= 0n;
+    button("btnAdjDebtMax").disabled = !state.wallet || state.orUsdBalance <= 0n;
     $("stTcr").textContent = nTroves > 0n ? (Number(tcr) / 1e16).toFixed(1) + "%" : "—";
     $("stMode").textContent = recovery ? "RECOVERY" : "Normal";
     $("stMode").className = recovery ? "bad" : "good";
@@ -115,16 +212,16 @@ export async function refresh(): Promise<void> {
         const halted = rd[1] !== 0n;
         $("simSeq").textContent = up ? "UP" : halted ? "DOWN" : "GRACE (1h)";
         $("simSeq").className = up ? "good" : "bad";
-        if (!up) toast((halted ? "L2 sequencer DOWN" : "sequencer restart grace period") +
-          " — oracles are serving lastGoodPrice", 6000);
-      } catch { /* ignore sequencer read failures */ }
+      } catch {
+        $("simSeq").textContent = "Status unavailable";
+        $("simSeq").className = "warn";
+      }
     }
     if (C.aggNav) {
       const nav = await C.aggNav.latestRoundData();
       $("simNav").textContent = "$" + (Number(nav[1]) / 1e8).toFixed(4);
     }
 
-    // ETH/USD shown in the simulator row (branch price may be derived)
     if (C.aggEth) {
       const rd = await C.aggEth.latestRoundData();
       $("simPrice").textContent = "$" + (Number(rd[1]) / 1e8).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -137,29 +234,41 @@ export async function refresh(): Promise<void> {
     $("balOra").textContent = fmt(oraBal) + " ORA";
     if (C.collToken) $("balWst").textContent = fmt(wstBal) + " " + collSym();
 
-    const active = trove.status === 1n;
-    $("troveNone").style.display = active ? "none" : "block";
-    $("troveActive").style.display = active ? "block" : "none";
-    if (active) {
-      const debt = entire[0], coll = entire[1];
-      const icr = Number(coll) * state.price / Number(debt) * 100;
-      const liqPrice = Number(ethers.formatEther(debt)) * brMcr() / Number(ethers.formatEther(coll));
+    const active = state.position !== null;
+    $("troveNone").hidden = active;
+    $("troveActive").hidden = !active;
+    $("troveTitle").textContent = active ? "Your Trove" : "Open a Trove";
+    $("troveEyebrow").textContent = active ? "ACTIVE POSITION" : "BORROW ORUSD";
+    if (state.position) {
+      const debt = state.position.debt, coll = state.position.collateral;
+      const collUnits = Number(ethers.formatEther(coll));
+      const debtUnits = Number(ethers.formatEther(debt));
+      const icr = collUnits * state.price / debtUnits * 100;
+      const liqPrice = collUnits > 0 ? debtUnits * brMcr() / collUnits : 0;
+      const tier = healthTier(icr, brMcr());
       $("tvColl").textContent = fmt(coll, 4) + " " + collSym();
       $("tvDebt").textContent = fmt(debt) + " orUSD";
-      $("tvIcr").textContent = icr.toFixed(1) + "%";
+      $("tvIcr").textContent = Number.isFinite(icr) ? icr.toFixed(1) + "%" : "—";
       $("tvIcr").className = icrClass(icr, brMcr() * 100);
-      $("tvLiq").textContent = "$" + liqPrice.toLocaleString("en-US", { maximumFractionDigits: 2 });
-      // Close readiness: full debt minus the refunded 200 orUSD gas comp
+      $("tvLiq").textContent = liqPrice > 0 ? "$" + liqPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—";
+      updateHealthMeter("positionHealthMeter", "positionHealthFill", "positionHealthBadge", icr, brMcr());
+      const riskCopy = healthExplanation(tier, icr, brMcr(), liqPrice, state.price);
+      $("positionRiskMessage").textContent = riskCopy;
       const closeNeed = debt - GAS_COMP;
       const ready = orusdBal >= closeNeed;
-      $("tvCloseHint").innerHTML = ready
-        ? `close repays <b>${fmt(closeNeed)} orUSD</b> — wallet has ${fmt(orusdBal)} <span class="good">✓</span>`
-        : `close repays <b>${fmt(closeNeed)} orUSD</b> — wallet has ${fmt(orusdBal)} ` +
-          `(<span class="bad">short ${fmt(closeNeed - orusdBal)}</span>: withdraw your SP deposit or repay partially)`;
+      $("tvCloseHint").textContent = ready
+        ? `Closing repays ${fmt(closeNeed)} orUSD; wallet has ${fmt(orusdBal)}.`
+        : `Closing needs ${fmt(closeNeed)} orUSD; wallet is short ${fmt(closeNeed - orusdBal)}. Withdraw your Stability Pool deposit or repay the Trove first.`;
       button("btnClose").disabled = !ready;
     }
     updateOpenPreview(rate);
+    updateAdjustmentPreview();
+    updateHealthBanner(Boolean(oracleLive), Boolean(navShock), Boolean(recovery));
 
+    $("spTvl").textContent = fmt(spTotal, 0) + " orUSD";
+    $("spApy").textContent = "Not estimated";
+    $("stTvl").textContent = fmt(totalStaked, 0) + " ORA";
+    $("stApy").textContent = "Not estimated";
     $("spDeposit").textContent = fmt(spDep) + " orUSD";
     $("spEthGain").textContent = fmt(spEth, 5) + " " + collSym();
     $("spOraGain").textContent = fmt(spOra, 3) + " ORA";
@@ -184,17 +293,120 @@ export async function refresh(): Promise<void> {
       $("svPrice").textContent = Number(ethers.formatEther(svP)).toFixed(6) + " orUSD";
       $("svTvl").textContent = fmt(svTvl, 0) + " orUSD";
       $("svBal").textContent = fmt(svShares) + " (" + fmt(svShares * svP / 10n ** 18n) + " orUSD)";
-      // interest stream/yr × savers' 80% share ÷ vault TVL
-      $("svApy").textContent = (svTvl > 0n ? Number(aggW) * 0.8 / Number(svTvl) * 100 : 0).toFixed(2) + "%";
+      $("svApy").textContent = svTvl > 0n
+        ? (Number(aggW) * 0.8 / Number(svTvl) * 100).toFixed(2) + "%"
+        : "No TVL";
       $("svPending").textContent = fmt(pend);
       $("stFee").textContent = (sysDebt > 0n ? Number(aggW) / Number(sysDebt) * 100 : 0).toFixed(2) + "%";
       await refreshLever();
     }
 
     await refreshTrovesTable();
+    if (!(document.getElementById("viewMarkets") as HTMLElement).hidden) await refreshMarketsTable();
+    state.lastRefreshAt = Date.now();
+    state.lastRefreshError = null;
+    updateDataFreshness();
+    return true;
   } catch (e) {
     console.error(e);
+    state.lastRefreshError = reason(e);
+    updateDataFreshness();
+    try {
+      updateOpenPreview(state.borrowingRate);
+      updateAdjustmentPreview();
+    } catch { /* preserve the visible stale-data warning even if a panel is unavailable */ }
+    return false;
   }
+}
+
+export function riskIncreaseBlockMessage(): string | null {
+  if (!hasFreshMarketData()) {
+    if (state.lastRefreshError) return "Market data refresh failed; wait for a successful update.";
+    if (state.lastRefreshAt === null) return "Waiting for the first successful market-data refresh.";
+    return `Market data is older than ${MAX_MARKET_DATA_AGE_MS / 1000} seconds; wait for it to refresh.`;
+  }
+  if (state.oracleLive !== true) return "Oracle status is not live; wait for the feed to recover.";
+  if (state.navShock) return "The NAV shock guard is active for this market.";
+  return null;
+}
+
+function syncRiskIncreaseControls(): void {
+  const block = riskIncreaseBlockMessage();
+  if (!state.dep) {
+    button("btnOpen").disabled = true;
+    button("btnLvOpen").disabled = true;
+    for (const id of ["btnAddColl", "btnWithdrawColl", "btnBorrowMore", "btnRepay"]) button(id).disabled = true;
+    $("lvRiskStatus").hidden = true;
+    return;
+  }
+  updateOpenPreview(state.borrowingRate);
+  updateAdjustmentPreview();
+  updatePositionHealth();
+  button("btnLvOpen").disabled = !!block;
+  $("lvRiskStatus").hidden = !block;
+  $("lvRiskStatus").textContent = block ? `Leveraged opening is paused: ${block}` : "";
+}
+
+export function updateDataFreshness(): void {
+  const freshness = $("dataFreshness");
+  if (state.lastRefreshError) {
+    freshness.dataset.stale = "true";
+    const last = state.lastRefreshAt
+      ? ` Last successful update: ${new Date(state.lastRefreshAt).toLocaleTimeString()}.`
+      : " No successful update has completed yet.";
+    freshness.textContent = `Could not refresh on-chain data; values may be stale.${last} ${state.lastRefreshError}`;
+    updateOracleBadge();
+    syncRiskIncreaseControls();
+    return;
+  }
+  if (!hasFreshMarketData()) {
+    freshness.dataset.stale = "true";
+    if (state.lastRefreshAt === null) {
+      freshness.textContent = "Waiting for the first successful on-chain refresh; risk-increasing actions are paused.";
+    } else {
+      const ageSeconds = Math.max(0, Math.ceil((Date.now() - state.lastRefreshAt) / 1000));
+      freshness.textContent = `On-chain data is ${ageSeconds}s old (limit ${MAX_MARKET_DATA_AGE_MS / 1000}s); risk-increasing actions are paused until it refreshes.`;
+    }
+    updateOracleBadge();
+    syncRiskIncreaseControls();
+    return;
+  }
+  freshness.dataset.stale = "false";
+  freshness.textContent = `On-chain data updated ${new Date(state.lastRefreshAt!).toLocaleTimeString()}.`;
+  updateOracleBadge();
+  syncRiskIncreaseControls();
+}
+
+function updateOracleBadge(): void {
+  const badge = $("oracleBadge");
+  if (!hasFreshMarketData()) {
+    badge.dataset.state = "unknown";
+    badge.textContent = "Oracle status unknown · data stale";
+  } else if (state.navShock) {
+    badge.dataset.state = "shock";
+    badge.textContent = "NAV shock guard active";
+  } else if (state.oracleLive === true) {
+    badge.dataset.state = "live";
+    badge.textContent = "Oracle live";
+  } else if (state.oracleLive === false) {
+    badge.dataset.state = "warning";
+    badge.textContent = "Oracle degraded";
+  } else {
+    badge.dataset.state = "pending";
+    badge.textContent = "Oracle status pending";
+  }
+}
+
+export function updateHealthBanner(oracleLive: boolean, navShock: boolean, recovery: boolean): void {
+  const warnings: string[] = [];
+  if (!oracleLive) warnings.push("Oracle status is not live. The protocol may be using its last trusted price; avoid opening or withdrawing collateral until the feed recovers.");
+  if (navShock) warnings.push("The NAV shock guard is active for this market. Review the displayed collateral price before acting.");
+  if (recovery) warnings.push("The protocol is in Recovery Mode. Trove adjustments may be subject to stricter rules.");
+  const banner = $("healthBanner");
+  banner.hidden = warnings.length === 0;
+  banner.dataset.severity = !oracleLive || navShock ? "critical" : "warning";
+  $("healthTitle").textContent = !oracleLive || navShock ? "Risk warning" : "System notice";
+  $("healthMessage").textContent = warnings.join(" ");
 }
 
 export async function refreshLever(): Promise<void> {
@@ -224,28 +436,221 @@ export async function refreshLever(): Promise<void> {
 }
 
 export function updateOpenPreview(rate?: bigint): void {
-  const coll = parseFloat(input("openColl").value) || 0;
-  const borrow = parseFloat(input("openDebt").value) || 0;
-  const fee = borrow * Number(rate ?? 5n * 10n ** 15n) / 1e18;
-  const totalDebt = borrow + fee + 200;
-  const icr = totalDebt > 0 ? (coll * state.price / totalDebt) * 100 : 0;
-  const cls = icrClass(icr, brMcr() * 100);
-  const ratePct = parseFloat(input("openRate").value) || 0;
-  $("openPreview").innerHTML =
-    (isRates()
-      ? `Interest: <b>≈${(totalDebt * ratePct / 100).toFixed(0)} orUSD/yr</b> at ${ratePct}%/yr (no upfront fee) · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`
-      : `Fee: <b>${fee.toFixed(2)} orUSD</b> · Total debt (incl. 200 gas comp): <b>${totalDebt.toFixed(2)} orUSD</b><br/>`) +
-    `Collateral ratio: <b class="${cls}">${icr.toFixed(1)}%</b> — liquidation below ${(brMcr() * 100).toFixed(0)}%` +
-    (borrow < 1800 ? ' · <span class="bad">minimum borrow is 1,800 orUSD</span>' : "") +
-    (bcfg().debtCap ? ` · isolated branch: debt cap ${Number(bcfg().debtCap).toLocaleString("en-US")} orUSD` : "");
+  const coll = Number(input("openColl").value);
+  const borrow = Number(input("openDebt").value);
+  const ratePct = Number(input("openRate").value);
+  const rates = isRates();
+  const feeRate = rates ? 0n : rate ?? state.borrowingRate ?? 5n * 10n ** 15n;
+  const price = state.price;
+  const calculation = calculateOpenPreview(coll, borrow, feeRate, price, brMcr());
+  const { fee, totalDebt, icr, liquidationPrice } = calculation;
+  const hasAmounts = Number.isFinite(coll) && coll > 0 && Number.isFinite(borrow) && borrow >= 1800;
+  const hasProjection = Number.isFinite(coll) && coll >= 0 && Number.isFinite(borrow) && borrow > 0;
+  const inputsValid = hasAmounts;
+  const rateValid = !rates || (Number.isFinite(ratePct) && ratePct >= 0.5 && ratePct <= 100);
+  const balanceEnough = !state.wallet || coll <= Number(ethers.formatEther(state.collateralBalance));
+  const riskBlock = riskIncreaseBlockMessage();
+  const riskGateOpen = riskBlock === null;
+  const healthValid = price > 0 && icr >= brMcr() * 100;
+  const canOpen = inputsValid && rateValid && balanceEnough && healthValid && riskGateOpen;
+  const displayTier = hasProjection && price > 0 && riskGateOpen ? calculation.risk : "unknown";
+  const preview = $("openPreview");
+  button("btnOpen").disabled = !canOpen;
+
+  const severity = !riskGateOpen || price <= 0 || !inputsValid || !rateValid || !balanceEnough
+    ? "warning" : calculation.risk;
+  preview.dataset.severity = severity === "safe" ? "normal" : severity;
+  updateHealthMeter("openHealthMeter", "openHealthFill", "openRiskBadge", icr, brMcr(), displayTier);
+  if (riskBlock) $("openRiskBadge").textContent = "Paused";
+  $("openFee").textContent = rates ? "No upfront fee" : borrow > 0 ? `${displayEstimate(fee)} orUSD` : "—";
+  $("openTotalDebt").textContent = borrow > 0 ? `${displayEstimate(totalDebt)} orUSD` : "—";
+  $("openIcr").textContent = price > 0 && borrow > 0 ? `${displayEstimate(icr, 1)}%` : "—";
+  $("openLiq").textContent = liquidationPrice > 0 ? `$${displayEstimate(liquidationPrice)}` : "—";
+
+  let message = hasProjection && price > 0
+    ? healthExplanation(calculation.risk, icr, brMcr(), liquidationPrice, price)
+    : price <= 0 ? "Waiting for a valid market price; opening remains disabled."
+      : "Enter collateral and borrow amounts to preview position health.";
+  if (rates && rateValid && hasProjection) {
+    message += ` Selected interest rate: ${ratePct}% per year; interest accrues over time.`;
+  }
+  if (borrow > 0 && borrow < 1800) message += " Minimum borrow is 1,800 orUSD.";
+  if (!rateValid) message += " Interest rate must be between 0.5% and 100% per year.";
+  if (!balanceEnough) message += " Collateral amount exceeds the available wallet balance.";
+  if (riskBlock) {
+    if (hasProjection && price > 0) message = `Last-known estimate: ${message} ${riskBlock} Opening is paused.`;
+    else message += ` ${riskBlock} Opening is paused.`;
+  }
+  $("openRiskCopy").textContent = message;
+  const cap = Number(bcfg().debtCap || 0);
+  const feeNote = rates
+    ? "No upfront borrowing fee. Estimated initial debt includes the 200 orUSD gas compensation; interest accrues at the selected rate."
+    : "Estimated debt includes the borrowing fee and 200 orUSD gas compensation.";
+  $("openFeeNote").textContent = cap > 0
+    ? `${feeNote} This market has a ${cap.toLocaleString("en-US")} orUSD debt cap.`
+    : feeNote;
+}
+
+function displayEstimate(value: number, decimals = 2): string {
+  return Number.isFinite(value)
+    ? value.toLocaleString("en-US", { maximumFractionDigits: decimals })
+    : "—";
+}
+
+export function updateAdjustmentPreview(): void {
+  const results = $("adjustmentResults");
+  if (!state.position || !(state.price > 0)) {
+    results.textContent = "Waiting for a Trove and valid market price to calculate projections.";
+    for (const id of ["btnAddColl", "btnWithdrawColl", "btnBorrowMore", "btnRepay"]) button(id).disabled = true;
+    return;
+  }
+
+  const collateralAmount = Number(input("adjCollAmount").value);
+  const debtAmount = Number(input("adjDebtAmount").value);
+  const collateral = Number(ethers.formatEther(state.position.collateral));
+  const debt = Number(ethers.formatEther(state.position.debt));
+  const feeRate = Number(state.borrowingRate) / 1e18;
+  const collateralProjections = adjustmentPreviews(collateral, debt, collateralAmount, state.price, feeRate, isRates(), brMcr());
+  const debtProjections = adjustmentPreviews(collateral, debt, debtAmount, state.price, feeRate, isRates(), brMcr());
+  const riskBlock = riskIncreaseBlockMessage();
+  const rows = [
+    { key: "add", button: "btnAddColl", title: `Add ${collSym()}`, amount: collateralAmount, projections: collateralProjections },
+    { key: "withdraw", button: "btnWithdrawColl", title: `Withdraw ${collSym()}`, amount: collateralAmount, projections: collateralProjections },
+    { key: "borrow", button: "btnBorrowMore", title: "Borrow orUSD", amount: debtAmount, projections: debtProjections },
+    { key: "repay", button: "btnRepay", title: "Repay orUSD", amount: debtAmount, projections: debtProjections },
+  ] as const;
+  results.replaceChildren();
+  for (const row of rows) {
+    const projection = row.projections[row.key];
+    const riskIncreasing = row.key === "withdraw" || row.key === "borrow";
+    const riskGateClosed = riskIncreasing && !!riskBlock;
+    const amount = row.amount;
+    const amountValid = Number.isFinite(amount) && amount > 0;
+    button(row.button).disabled = !projection.executable || riskGateClosed;
+
+    const card = document.createElement("article");
+    card.className = "adjustment-result";
+    card.dataset.risk = amountValid && !riskBlock ? projection.risk : "unknown";
+    const unit = row.key === "add" || row.key === "withdraw" ? collSym() : "orUSD";
+    const delta = row.key === "add" || row.key === "borrow" ? "+" : "−";
+    const feeHint = row.key === "borrow" && !isRates() ? " + fee" : "";
+    const title = document.createElement("strong");
+    title.textContent = `${row.title} (${delta}${displayEstimate(amount)} ${unit}${feeHint})`;
+    const balances = document.createElement("p");
+    balances.textContent = `After: ${displayEstimate(projection.collateral, 4)} ${collSym()} collateral · ${displayEstimate(projection.debt)} orUSD debt`;
+    const health = document.createElement("p");
+    health.className = "result-health";
+    health.textContent = `Ratio ${displayEstimate(projection.icr, 1)}% · liquidation price $${displayEstimate(projection.liquidationPrice)}`;
+    const reasonText = document.createElement("p");
+    reasonText.className = "result-reason";
+    reasonText.textContent = riskGateClosed
+      ? `${riskBlock} This risk-increasing action is paused.`
+      : riskBlock ? `Projection uses the last known market price. ${riskBlock}`
+        : projection.reason;
+    card.append(title, balances, health, reasonText);
+    results.appendChild(card);
+  }
+}
+
+export async function refreshMarketsTable(): Promise<void> {
+  const tbody = $("marketTable").querySelector("tbody") as HTMLElement;
+  if (!state.dep || !state.provider || !state.networkReady) {
+    tbody.replaceChildren();
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.textContent = "Market data is unavailable until a network is connected.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    $("marketDirectoryStatus").textContent = "No network data";
+    return;
+  }
+
+  $("marketDirectoryStatus").textContent = "Refreshing on-chain market data…";
+  const deployment = state.dep;
+  const results = await Promise.all(Object.entries(deployment.branches).map(async ([key, branch]) => {
+    const tmAbi = branch.rates ? deployment.abis.troveManagerRates
+      : branch.native ? deployment.abis.troveManager
+        : (deployment.abis.troveManagerV2 || deployment.abis.troveManager);
+    const feedAbi = branch.native ? deployment.abis.priceFeed
+      : branch.rwa ? deployment.abis.priceFeedRWA : deployment.abis.priceFeedWstETH;
+    try {
+      const manager = new ethers.Contract(branch.troveManager, tmAbi, provider());
+      const feed = new ethers.Contract(branch.priceFeed, feedAbi, provider());
+      const [debt, live, price] = await Promise.all([
+        manager.getEntireSystemDebt(), feed.oracleLive(), feed.getPrice(),
+      ]);
+      return { key, branch, debt: debt as bigint, live: Boolean(live), price: price as bigint, error: false };
+    } catch {
+      return { key, branch, debt: null, live: null, price: null, error: true };
+    }
+  }));
+
+  tbody.replaceChildren();
+  let unavailable = 0;
+  for (const result of results) {
+    const { key, branch } = result;
+    if (result.error) unavailable++;
+    const row = document.createElement("tr");
+    row.dataset.current = String(key === state.branch);
+    if (key === state.branch) row.classList.add("is-current");
+
+    const market = document.createElement("td");
+    market.dataset.label = "Market";
+    const marketName = document.createElement("span");
+    marketName.className = "market-name";
+    marketName.textContent = branch.collSymbol;
+    const marketSub = document.createElement("small");
+    marketSub.textContent = key === branch.collSymbol ? key : `${key} market`;
+    const price = document.createElement("small");
+    price.className = "market-price-note";
+    price.textContent = result.price === null ? "Price unavailable" : fmtUsd(result.price);
+    market.append(marketName, marketSub, price);
+
+    const oracle = document.createElement("td");
+    oracle.dataset.label = "Oracle";
+    const oraclePill = document.createElement("span");
+    oraclePill.className = "market-status";
+    oraclePill.dataset.status = result.live === null ? "unknown" : result.live ? "live" : "degraded";
+    oraclePill.textContent = result.live === null ? "Unavailable" : result.live ? "Live" : "Degraded";
+    oracle.appendChild(oraclePill);
+
+    const mcr = document.createElement("td");
+    mcr.dataset.label = "MCR";
+    mcr.textContent = `${((Number(branch.mcr) || 1.1) * 100).toFixed(0)}%`;
+
+    const debt = document.createElement("td");
+    debt.dataset.label = "Total debt";
+    debt.textContent = result.debt === null ? "Unavailable" : `${fmt(result.debt, 0)} orUSD`;
+
+    const cap = document.createElement("td");
+    cap.dataset.label = "Debt cap";
+    const debtCap = Number(branch.debtCap || 0);
+    cap.textContent = debtCap > 0 ? `${debtCap.toLocaleString("en-US")} orUSD` : "No cap";
+
+    row.append(market, oracle, mcr, debt, cap);
+    tbody.appendChild(row);
+  }
+  $("marketDirectoryStatus").textContent = unavailable
+    ? `${results.length} markets · ${unavailable} data source${unavailable === 1 ? "" : "s"} unavailable`
+    : `${results.length} markets · on-chain data`;
 }
 
 export async function refreshTrovesTable(): Promise<void> {
   const { C } = state;
   const rows = await C.multiGetter.getMultipleSortedTroves(0, state.troveRows);
-  $("btnMoreTroves").style.display = rows.length >= state.troveRows ? "inline-block" : "none";
+  $("btnMoreTroves").hidden = rows.length < state.troveRows;
   const tbody = $("trovesTable").querySelector("tbody") as HTMLElement;
-  tbody.innerHTML = "";
+  tbody.replaceChildren();
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.textContent = "No open Troves in this market yet.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
   const rowRates = isRates()
     ? await Promise.all(rows.map((r: { 0: string }) => C.troveManager.troveAnnualRate(r[0]).catch(() => 0n)))
     : null;
@@ -260,14 +665,46 @@ export async function refreshTrovesTable(): Promise<void> {
     const soft = !isNative() && liq && icr >= brSoft() * 100;
     const tr = document.createElement("tr");
     if (liq) tr.className = "liq";
-    tr.innerHTML =
-      `<td title="${owner}">${short(owner)}${owner === myAddr() ? " (you)" : ""}` +
-      (rowRates ? ` <span class="hint">@ ${(Number(rowRates[ri]) / 1e16).toFixed(1)}%</span>` : "") + `</td>` +
-      `<td>${fmt(coll, 3)} ${collSym()}</td><td>${fmt(debt, 0)} orUSD</td>` +
-      `<td class="${liq ? "bad" : icr < brMcr() * 100 + 40 ? "warn" : "good"}">${icr.toFixed(1)}%</td>` +
-      `<td><button class="mini" data-liq="${owner}" ${liq ? "" : "disabled"}>Liquidate</button>` +
-      (soft ? ` <button class="mini" data-softliq="${owner}" title="Partial liquidation: restores the trove to ${(brMcr() * 100).toFixed(0)}% at a 3% premium">Soft-liq</button>` : "") +
-      `</td>`;
+    const ownerCell = document.createElement("td");
+    ownerCell.dataset.label = "Owner";
+    ownerCell.title = owner;
+    ownerCell.append(document.createTextNode(`${short(owner)}${owner === myAddr() ? " (you)" : ""}`));
+    if (rowRates) {
+      const rate = document.createElement("span");
+      rate.className = "hint trove-rate";
+      rate.textContent = `@ ${(Number(rowRates[ri]) / 1e16).toFixed(1)}%`;
+      ownerCell.appendChild(rate);
+    }
+    const collateralCell = document.createElement("td");
+    collateralCell.dataset.label = "Collateral";
+    collateralCell.textContent = `${fmt(coll, 3)} ${collSym()}`;
+    const debtCell = document.createElement("td");
+    debtCell.dataset.label = "Debt";
+    debtCell.textContent = `${fmt(debt, 0)} orUSD`;
+    const ratioCell = document.createElement("td");
+    ratioCell.dataset.label = "Collateral ratio";
+    ratioCell.className = liq ? "bad" : icr < brMcr() * 100 + 40 ? "warn" : "good";
+    ratioCell.textContent = `${icr.toFixed(1)}%`;
+    const actionsCell = document.createElement("td");
+    actionsCell.dataset.label = "Actions";
+    const liquidate = document.createElement("button");
+    liquidate.className = "mini";
+    liquidate.dataset.liq = owner;
+    liquidate.disabled = !liq;
+    liquidate.title = liq ? "Liquidate this Trove" : "Only eligible below the market minimum collateral ratio";
+    liquidate.setAttribute("aria-label", `Liquidate Trove owned by ${short(owner)}`);
+    liquidate.textContent = "Liquidate";
+    actionsCell.appendChild(liquidate);
+    if (soft) {
+      const partial = document.createElement("button");
+      partial.className = "mini";
+      partial.dataset.softliq = owner;
+      partial.title = `Partial liquidation: restores the Trove to ${(brMcr() * 100).toFixed(0)}% at a 3% premium`;
+      partial.setAttribute("aria-label", `Soft-liquidate Trove owned by ${short(owner)}`);
+      partial.textContent = "Soft-liq";
+      actionsCell.appendChild(partial);
+    }
+    tr.append(ownerCell, collateralCell, debtCell, ratioCell, actionsCell);
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll<HTMLButtonElement>("button[data-liq]").forEach((b) =>

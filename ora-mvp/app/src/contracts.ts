@@ -5,7 +5,6 @@ import { ethers } from "ethers";
 import { Z } from "./config";
 import { state, dep, bcfg, provider, myAddr, req } from "./state";
 import { isRatesBranch } from "./branch";
-import { toast } from "./dom";
 
 export function connectContracts(): void {
   const runner = state.wallet ?? provider();
@@ -105,17 +104,6 @@ export async function adjustHints(dColl: bigint, dDebt: bigint): Promise<[string
 export async function borrowWithFee(amount: bigint): Promise<bigint> {
   const rate = await state.C.troveManager.getBorrowingRateWithDecay();
   return amount + (amount * rate) / 10n ** 18n;
-}
-
-// Ensure the branch BorrowerOperations may pull our collateral tokens.
-export async function ensureAllowance(needed: bigint): Promise<void> {
-  const { C } = state;
-  const allowance = await C.collToken.allowance(myAddr(), bcfg().borrowerOperations);
-  if (allowance < needed) {
-    toast("Approving " + bcfg().collSymbol + "…", 30000);
-    const t = await C.collToken.approve(bcfg().borrowerOperations, ethers.MaxUint256);
-    await t.wait();
-  }
 }
 
 // Leverage Zapper (rates branch): per-user proxy owns the leveraged trove.
