@@ -92,7 +92,7 @@ jobs:
     name: Foundry invariant tests
     runs-on: ubuntu-latest
     permissions:
-      issues: write
+      pull-requests: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -106,15 +106,16 @@ jobs:
           set -o pipefail
           forge test -vvv 2>&1 | tee ../forge-output.txt
       # TEMPORARY DEBUG (revert after green): CI logs are unreadable from the
-      # sandbox, so post the failure tail to an issue instead.
+      # sandbox, so post the failure tail to the PR instead.
       - name: DEBUG post forge tail
         if: failure()
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; echo '```'; tail -c 45000 forge-output.txt; echo '```'; } > /tmp/forge-body.md
-          gh issue create --title "[debug] foundry ${{ github.run_id }}" --body-file /tmp/forge-body.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number')
+          { echo "run ${{ github.run_id }} (foundry):"; echo '```'; tail -c 45000 forge-output.txt; echo '```'; } > /tmp/forge-body.md
+          gh pr comment "$PR" --body-file /tmp/forge-body.md
 
   oracle-config:
     name: Oracle prod-config gate
@@ -134,7 +135,7 @@ jobs:
     name: Fork tests (Base Sepolia)
     runs-on: ubuntu-latest
     permissions:
-      issues: write
+      pull-requests: write
     defaults:
       run:
         working-directory: ora-mvp
@@ -159,8 +160,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; echo '```'; tail -c 45000 fork-output.txt; echo '```'; } > /tmp/fork-body.md
-          gh issue create --title "[debug] fork ${{ github.run_id }}" --body-file /tmp/fork-body.md
+          PR=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number')
+          { echo "run ${{ github.run_id }} (fork):"; echo '```'; tail -c 45000 fork-output.txt; echo '```'; } > /tmp/fork-body.md
+          gh pr comment "$PR" --body-file /tmp/fork-body.md
 
   keeper-load:
     name: Keeper scan load test (500 troves)
