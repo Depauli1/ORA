@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-ethers");
 require("@nomicfoundation/hardhat-chai-matchers");
+require("@nomicfoundation/hardhat-verify");
 // Coverage is opt-in (COVERAGE=1) so normal compile/test runs stay fast.
 if (process.env.COVERAGE === "1") require("solidity-coverage");
 
@@ -116,7 +117,26 @@ module.exports = {
       url: process.env.ORA_RPC_URL || "https://sepolia.base.org",
       chainId: 84532,
       accounts: deployerKey() ? [deployerKey()] : []
+    },
+    base: {
+      url: process.env.ORA_RPC_URL_BASE || "https://mainnet.base.org",
+      chainId: 8453,
+      accounts: deployerKey() ? [deployerKey()] : []
     }
+  },
+  // Basescan verification (Etherscan V2 unified API): one key covers Base +
+  // Base Sepolia. scripts/verify-deployment.js walks the manifest's `verify`
+  // section; constructor args are captured at deploy time.
+  etherscan: {
+    apiKey: { baseSepolia: process.env.BASESCAN_API_KEY || "DUMMY_FOR_LOCAL" },
+    customChains: [{
+      network: "baseSepolia",
+      chainId: 84532,
+      urls: {
+        apiURL: "https://api.etherscan.io/v2/api?chainid=84532",
+        browserURL: "https://sepolia.basescan.org"
+      }
+    }]
   },
   paths: {
     sources: "./contracts"
