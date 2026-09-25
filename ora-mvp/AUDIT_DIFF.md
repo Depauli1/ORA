@@ -116,13 +116,15 @@ valid under both compilers).
 5. `aggWeightedDebt` is a display aggregate; subtraction guards absorb dust.
 6. **Slither triage** (CI gates on high severity in Tier 3): the 3 high
    findings it caught (unchecked `transfer` returns in `BranchStaking`,
-   inherited from the upstream staking pattern) are FIXED with `require`.
+   inherited from the upstream staking pattern) are FIXED with `require`,
+   as is the unchecked compensation `transfer` in `BatchLiquidator`.
    Remaining medium findings are accepted patterns: `divide-before-multiply`
    precision (bounded, 1e18-scaled), vault/wrapper strict `== 0` supply checks
    (standard first-deposit branch), and `reentrancy-no-eth` after
    `transferFrom` of trusted protocol tokens (orUSD/mTBILL revert-on-failure,
-   no callbacks). Intentional ETH sends (swap payout, owner sweep, `exec`)
-   carry inline `slither-disable` comments with justifications.
+   no callbacks). Intentional ETH sends (swap payout, owner sweep, `exec`,
+   keeper compensation forward, permissionless dust sweep) carry inline
+   `slither-disable` comments with justifications.
 
 ## Verification pointers
 

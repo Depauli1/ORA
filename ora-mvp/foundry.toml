@@ -2,7 +2,8 @@
 src = "contracts"
 test = "test/foundry"
 libs = ["lib", "node_modules"]
-solc = "0.8.24"
+# No solc pin: the tree mixes 0.6.11 (upstream core) and 0.8.24 (Tier 3), so a
+# pinned version fails half the files — auto-detect picks per-file instead.
 optimizer = true
 optimizer_runs = 200
 # Handler reverts are invariant breaches by construction (ops are clamped and

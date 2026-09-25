@@ -82,24 +82,35 @@ contract BatchLiquidator {
     function _forwardCompensation(address _orUSD) internal {
         uint256 ethBal = address(this).balance;
         if (ethBal > 0) {
+            // The sweep caller paid the gas, so this sweep's compensation is
+            // rightfully theirs; the contract holds no funds between calls
+            // (leftovers only from failed forwards, see below).
+            // slither-disable-next-line arbitrary-send-eth
             (bool ok, ) = payable(msg.sender).call{value: ethBal}("");
             if (!ok) { return; }
         }
         if (_orUSD != address(0)) {
             uint256 tokBal = IERC20Sweep(_orUSD).balanceOf(address(this));
             if (tokBal > 0) {
-                IERC20Sweep(_orUSD).transfer(msg.sender, tokBal);
+                require(IERC20Sweep(_orUSD).transfer(msg.sender, tokBal),
+                    "BatchLiquidator: compensation forward failed");
             }
         }
     }
 
+    // slither-disable-start arbitrary-send-eth
     // Escape hatches for anything left behind (branch ERC20 compensation,
     // or pushes a contract caller could not receive). Permissionless by
     // design — callers that care use EOAs and the auto-forward above.
+    // Permissionless dust recovery: the contract is never supposed to hold
+    // funds, so there is nothing here an attacker could steal that isn't
+    // already sweepable. (Start/end range: this detector reports the whole
+    // function including doc-comment lines, which defeats next-line matching.)
     function sweepETH(address payable _to) external {
         (bool ok, ) = _to.call{value: address(this).balance}("");
         require(ok, "BatchLiquidator: ETH sweep failed");
     }
+    // slither-disable-end arbitrary-send-eth
 
     function sweepToken(address _token, address _to) external {
         uint256 bal = IERC20Sweep(_token).balanceOf(address(this));

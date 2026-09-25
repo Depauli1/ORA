@@ -26,9 +26,14 @@ async function retry(label, fn, tries = 3) {
 }
 
 (FORK ? describe : describe.skip)("fork reads — Base Sepolia", () => {
-  it("chain is really Base Sepolia", async () => {
-    const net = await retry("getNetwork", () => ethers.provider.getNetwork());
-    expect(Number(net.chainId)).to.equal(84532);
+  it("forked state is present (remote contract code is visible)", async () => {
+    // NOTE: Hardhat keeps the LOCAL chainId (31337) in fork mode, so an
+    // eth_chainId assertion would be wrong — remote code presence is the
+    // real proof that forking works.
+    const code = await retry("getCode", () => ethers.provider.getCode(BASE_SEPOLIA_ETHUSD));
+    expect(code).to.not.equal("0x");
+    const block = await retry("getBlockNumber", () => ethers.provider.getBlockNumber());
+    expect(block).to.be.greaterThan(1_000_000); // a real L2 height, not a fresh chain
   });
 
   it("REAL_FEEDS default is a live ETH/USD aggregator with a sane price", async () => {

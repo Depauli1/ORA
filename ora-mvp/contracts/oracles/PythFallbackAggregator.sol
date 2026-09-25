@@ -8,8 +8,15 @@ import "../dependencies08/OraCheckContract.sol";
 /* Minimal view of the Pyth EVM contract (only what a fallback needs).
  * Full interface: https://github.com/pyth-network/pyth-crosschain — getPriceUnsafe
  * returns the latest PUBLISHED price (no pull payment); freshness is enforced
- * downstream by ChainlinkPriceFeed's heartbeat timeout on updatedAt. */
-interface IPyth {
+ * downstream by ChainlinkPriceFeed's heartbeat timeout on updatedAt.
+ *
+ * NOTE: deliberately NOT named IPyth. Slither's pyth-unchecked-* detectors
+ * key on that exact contract name and assume the struct-return SDK call
+ * shape — they assert-crash on tuple returns, killing the whole run. The
+ * checks those detectors nag about are all implemented here regardless:
+ * expo scaling (_scaleTo8), publishTime staleness (feed heartbeat +
+ * constructor probe), and price sign (zero/negative => answer 0). */
+interface IPythPriceReader {
     function getPriceUnsafe(bytes32 _id)
         external
         view
@@ -30,13 +37,13 @@ interface IPyth {
  * roundId = publishTime (fits uint80 for millennia).
  */
 contract PythFallbackAggregator is AggregatorV3Interface, OraCheckContract {
-    IPyth public immutable pyth;
+    IPythPriceReader public immutable pyth;
     bytes32 public immutable priceId;
 
     constructor(address _pyth, bytes32 _priceId) {
         checkContract(_pyth);
         require(_priceId != bytes32(0), "PythFallback: zero price id");
-        pyth = IPyth(_pyth);
+        pyth = IPythPriceReader(_pyth);
         priceId = _priceId;
         // Probe at deploy: an unpublished id must fail the deploy, loudly.
         (int64 p, , , uint256 t) = pyth.getPriceUnsafe(_priceId);

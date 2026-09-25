@@ -64,7 +64,7 @@ jobs:
       - run: npx hardhat compile
       - name: Full report (informational, never fails)
         run: |
-          slither . --ignore-compile --checklist --no-fail-pedantic > ../slither-full-report.md 2> ../slither-full-stderr.txt || true
+          slither . --ignore-compile --compile-force-framework Hardhat --checklist --no-fail-pedantic > ../slither-full-report.md 2> ../slither-full-stderr.txt || true
           {
             echo "## Slither — full report (informational)"
             echo "<details><summary>expand</summary>"
@@ -75,7 +75,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Gate — no high-severity findings in new ORA contracts
         run: |
-          slither . --ignore-compile --json slither-gate.json \
+          slither . --ignore-compile --compile-force-framework Hardhat --json slither-gate.json \
             --filter-paths "node_modules|Dependencies/|Interfaces/|TestContracts/|LQTY/|Proxy|TroveManager|BorrowerOperations|StabilityPool|ActivePool|DefaultPool|CollSurplusPool|HintHelpers|SortedTroves|MultiTroveGetter|GasPool|LUSDToken|Migrations|LiquityBaseRWA" \
             || true
           node scripts/slither-gate.js slither-gate.json
