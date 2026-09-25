@@ -1,7 +1,8 @@
 # Deploys the ORA protocol to Base Sepolia from CI (the dev sandbox cannot
 # reach public RPCs, so GitHub's runners are the deploy machine).
 #
-# Trigger: push any change to ora-mvp/.deploy-testnet-trigger on this branch.
+# Trigger: push a change to ora-mvp/.deploy-testnet-trigger on main/the Arena
+#          session branch, or manually dispatch after this workflow is merged.
 # Gate:    fails fast with funding instructions while the deployer is unfunded.
 # Output:  commits ora-mvp/app/deployment-baseSepolia.json back to the branch —
 #          the ORA web app's "Base Sepolia" network switch reads that file.
@@ -12,8 +13,9 @@ name: Deploy ORA to Base Sepolia
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
+    branches: ["main", "arena/01a0d869-ora"]
     paths: ["ora-mvp/.deploy-testnet-trigger"]
+  workflow_dispatch:
 
 permissions:
   contents: write
