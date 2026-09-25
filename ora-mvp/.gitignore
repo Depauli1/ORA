@@ -7,3 +7,4 @@ bin/
 coverage.json
 coverage/
 out/
+app/dist

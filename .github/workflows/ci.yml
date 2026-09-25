@@ -1,6 +1,7 @@
-# ORA continuous integration (7 jobs): Hardhat suite + Slither + Foundry
+# ORA continuous integration (8 jobs): Hardhat suite + Slither + Foundry
 # invariants + oracle prod-config gate + Base Sepolia fork reads + keeper
-# scan load test + Tier-3 coverage gate. The Slither gate fails the build on
+# scan load test + Tier-3 coverage gate + frontend (typecheck, build,
+# vitest, Playwright e2e). The Slither gate fails the build on
 # high-severity findings in the NEW ORA contracts (zap, WTBill, vault/router,
 # oracles, branch staking/issuance); the audited upstream Liquity core and its
 # textual parameter forks are reported informationally but do not gate (their
@@ -173,3 +174,29 @@ jobs:
         run: npm run coverage
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+
+  frontend:
+    name: Frontend (typecheck, build, vitest, e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ora-mvp/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vite build
+      - name: Vitest (server + UI suites)
+        run: npx vitest run app/test/
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e (fresh chain + deploy + app server)
+        run: npx playwright test
+        env:
+          CI: "true"

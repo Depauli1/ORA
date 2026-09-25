@@ -92,3 +92,16 @@ footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: cen
 .tab { padding: 8px 22px; border-radius: 9px; font-weight: 600; }
 .tab.active { background: linear-gradient(90deg, var(--amber), #d98d10); color: #17110a; border-color: transparent; }
 .new { font-size: 9px; background: var(--green); color: #08130c; border-radius: 5px; padding: 2px 5px; margin-left: 4px; vertical-align: middle; }
+
+/* WalletConnect QR modal */
+.wc-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.wc-card {
+  background: #fff; color: #111; border-radius: 12px; padding: 20px 24px;
+  max-width: min(92vw, 380px); text-align: center;
+}
+.wc-card h3 { margin: 0 0 12px; font-size: 16px; }
+.wc-qr svg { width: 100%; height: auto; display: block; }
+.wc-row { margin-top: 12px; display: flex; gap: 8px; justify-content: center; }
