@@ -11,7 +11,7 @@ name: CI
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
+    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora", "arena/01a0d969-ora"]
     paths-ignore:
       - "ora-mvp/.deploy-testnet-trigger"
       - "ora-mvp/app/deployment-baseSepolia.json"
