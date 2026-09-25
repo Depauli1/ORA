@@ -3,6 +3,7 @@
 import "./styles.css";
 import { NETWORKS } from "./config";
 import { state } from "./state";
+import { isLocalhost } from "./wallet-gate";
 import { initWalletDiscovery } from "./wallet";
 import { loadConfig, setNetwork } from "./network";
 import { refresh } from "./views";
@@ -40,7 +41,10 @@ export async function boot(hostname: string = location.hostname): Promise<void> 
   state.reset(hostname);
   initWalletDiscovery();
   await loadConfig();
-  await setNetwork("local");
+  // Off loopback there is no local chain — boot straight into Base Sepolia
+  // (public RPC + wallet) instead of a gated local mode. Localhost keeps
+  // the demo chain default.
+  await setNetwork(isLocalhost(hostname) ? "local" : "baseSepolia");
   wireActions();
   state.refreshTimer = setInterval(() => { if (!state.busy) void refresh(); }, 8000);
 }

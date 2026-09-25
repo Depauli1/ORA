@@ -2,8 +2,11 @@ import { defineConfig } from "vite";
 
 // Frontend build: app/ is the Vite root, dist/ the served bundle.
 // server.js serves dist/ (built) with an app/ fallback for deployment files.
+// base "./" keeps asset URLs relative so the same bundle works served from
+// any path (local server, GitHub Pages project subpath, IPFS).
 export default defineConfig({
   root: "app",
+  base: "./",
   publicDir: "public",
   build: {
     outDir: "dist",

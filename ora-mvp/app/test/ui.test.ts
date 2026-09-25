@@ -128,16 +128,27 @@ describe("frontend (vitest + jsdom)", () => {
     } finally { app.cleanup(); }
   });
 
-  it("refuses demo mode off localhost (keys never render)", async () => {
+  it("off localhost, boots to Base Sepolia — demo keys never wire", async () => {
     const app = await bootOnce({ hostname: "example.com" });
     try {
       expect(app.errors).toEqual([]);
-      expect(app.toast()).toMatch(/localhost only/);
+      // no deployment file served for baseSepolia in this test
+      expect(app.toast()).toMatch(/not deployed yet/);
       expect(document.getElementById("addr")!.textContent).toBe("—");
-      // picker left hidden (its static default has no inline style, but no
-      // demo wallet was constructed — the security property)
+      // the security property: no demo wallet constructed, nothing loaded
       expect(state.wallet).toBeNull();
       expect(state.dep).toBeNull();
+    } finally { app.cleanup(); }
+  });
+
+  it("local mode stays localhost-gated even when selected directly", async () => {
+    const app = await bootOnce({ hostname: "example.com" });
+    try {
+      await setNetwork("local");
+      expect(app.toast()).toMatch(/localhost only/);
+      expect(state.wallet).toBeNull();
+      expect(state.dep).toBeNull();
+      expect(app.errors).toEqual([]);
     } finally { app.cleanup(); }
   });
 

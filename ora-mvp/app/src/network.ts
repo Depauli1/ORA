@@ -80,6 +80,9 @@ export async function setNetwork(mode: string): Promise<void> {
       (t.style.display = dep.branches[t.dataset.branch || ""] ? "" : "none"));
     if (!dep.branches[state.branch]) state.branch = Object.keys(dep.branches)[0];
 
+    // Keep the selector in sync on success (boot may land on a non-default
+    // network; failure paths above already restore the previous value).
+    select("networkSelect").value = state.netMode;
     if (net.local) setAccount(select("accountSelect").value);
     setBranch(dep.branches.ETH ? "ETH" : Object.keys(dep.branches)[0]);
     await refresh();
