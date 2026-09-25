@@ -77,13 +77,19 @@ export async function boot(hostname: string = location.hostname): Promise<void> 
   installErrorHooks();
   state.reset(hostname);
   hydrateActivity();
+  // Wire controls BEFORE the awaited network bootstrap: setNetwork() paints
+  // "Local demo"/"ready" while its deployment fetch + first refresh are still
+  // in flight, and a user (or e2e) interacting in that window would dispatch
+  // change/click events into a not-yet-wired UI — the event is silently lost
+  // and the app looks frozen. Handlers all guard on network-ready state, so
+  // early wiring is safe; wiring late is not.
+  wireActions();
   initWalletDiscovery();
   await loadConfig();
   // Localhost keeps the local demo default. The hosted Arena preview may use
   // it only when its server explicitly opts in; all other public hosts remain
   // on the published-network path.
   await setNetwork(canUseDemo(hostname, state.appConfig.previewDemo) ? "local" : "baseSepolia");
-  wireActions();
   installVisibilityHook();
   pollDelayMs = BASE_POLL_MS;
   schedulePoll();
