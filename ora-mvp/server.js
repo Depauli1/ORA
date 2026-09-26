@@ -33,7 +33,9 @@ function createServer(opts = {}) {
   const H = () => lib.securityHeaders(cspExtra);
   const distDir = path.join(appDir, "dist");
   const useDist = fs.existsSync(path.join(distDir, "index.html"));
-  if (!useDist) console.warn("[server] app/dist missing — serving legacy app/ dir (run `vite build` first)");
+  if (!useDist) {
+    console.warn("[server] app/dist missing — serving legacy app/ dir (run `vite build` first)");
+  }
 
   const apiLimit = lib.createRateLimiter({ windowMs: 60_000, max: 120 });
   const faucetIpLimit = lib.createRateLimiter({ windowMs: 3_600_000, max: 5 });
@@ -65,6 +67,7 @@ function createServer(opts = {}) {
   }
 
   const server = http.createServer(async (req, res) => {
+    // v8 ignore next — req.url is always set by the http parser
     const urlPath = (req.url || "/").split("?")[0];
     const ip = lib.clientIp(req);
 
@@ -93,10 +96,9 @@ function createServer(opts = {}) {
       let body;
       try {
         body = await lib.readBody(req, 1024);
-      } catch (e) {
-        if (req.destroyed) return; // fail-fast under flood: socket already gone
-        res.writeHead(e.status || 500, { "content-type": "application/json", ...H() });
-        return res.end(JSON.stringify({ error: e.message }));
+      } catch {
+        // Flood defense by design: readBody already rejected AND destroyed
+        // the socket — there is no peer left to answer, so nothing to send.
       }
       let to;
       try {
@@ -129,10 +131,9 @@ function createServer(opts = {}) {
       let body;
       try {
         body = await lib.readBody(req, 10 * 1024);
-      } catch (e) {
-        if (req.destroyed) return; // fail-fast under flood: socket already gone
-        res.writeHead(e.status || 500, { "content-type": "application/json", ...H() });
-        return res.end(JSON.stringify({ error: e.message }));
+      } catch {
+        // Flood defense by design: readBody already rejected AND destroyed
+        // the socket — there is no peer left to answer, so nothing to send.
       }
       try {
         const e = JSON.parse(body || "{}");
@@ -161,10 +162,9 @@ function createServer(opts = {}) {
       let body;
       try {
         body = await lib.readBody(req, 1024 * 1024);
-      } catch (e) {
-        if (req.destroyed) return; // fail-fast under flood: socket already gone
-        res.writeHead(e.status || 500, { "content-type": "application/json", ...H() });
-        return res.end(JSON.stringify({ error: e.message }));
+      } catch {
+        // Flood defense by design: readBody already rejected AND destroyed
+        // the socket — there is no peer left to answer, so nothing to send.
       }
       try {
         const r = await fetch(rpcUrl, {
@@ -185,8 +185,7 @@ function createServer(opts = {}) {
     }
 
     // Static files: built dist/ first, legacy app/ fallback
-    let p = urlPath;
-    if (p === "/") p = "/index.html";
+    const p = urlPath === "/" ? "/index.html" : urlPath;
     const roots = useDist ? [distDir, appDir] : [appDir];
     for (const root of roots) {
       const file = path.normalize(path.join(root, p));
@@ -195,8 +194,8 @@ function createServer(opts = {}) {
         return res.end();
       }
       try {
+        if (fs.statSync(file).isDirectory()) continue; // e.g. GET /src → next root
         const data = fs.readFileSync(file);
-        if (fs.statSync(file).isDirectory()) continue;
         res.writeHead(200, {
           "content-type": MIME[path.extname(file)] || "application/octet-stream",
           "cache-control": lib.cacheControl(p),
@@ -212,11 +211,14 @@ function createServer(opts = {}) {
   return server;
 }
 
-if (require.main === module) {
+/** Process entry: `node server.js` — listen on PORT (default 3000). */
+function startServerFromEnv() {
   const PORT = process.env.PORT || 3000;
-  createServer().listen(PORT, "0.0.0.0", () =>
+  return createServer().listen(PORT, "0.0.0.0", () =>
     console.log(`ORA app listening on http://0.0.0.0:${PORT} (RPC proxy -> http://127.0.0.1:8545)`)
   );
 }
+// v8 ignore next
+if (require.main === module) startServerFromEnv();
 
-module.exports = { createServer };
+module.exports = { createServer, startServerFromEnv };

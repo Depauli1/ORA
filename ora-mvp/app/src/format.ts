@@ -2,10 +2,24 @@
 // tested (these format fund-critical numbers: debts, ratios, shortfalls).
 import { ethers } from "ethers";
 
+// Single source of locale-sensitive formatting. Every user-facing number in
+// the app goes through fmt/fmtNum/fmtPct/fmtUsd(Num) — a future locale (or
+// currency convention) changes these definitions and nothing else. Numeric
+// SERIALIZATION (toFixed feeding parseEther) must stay locale-free and is
+// deliberately not routed here.
+export const NUMBER_LOCALE = "en-US";
+
 export const fmt = (v: bigint, d = 2): string =>
-  Number(ethers.formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: d });
+  Number(ethers.formatEther(v)).toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: d });
+
+export const fmtNum = (v: number, d = 2): string =>
+  v.toLocaleString(NUMBER_LOCALE, { maximumFractionDigits: d });
+
+export const fmtPct = (v: number, d = 1): string => `${fmtNum(v, d)}%`;
 
 export const fmtUsd = (v: bigint, d = 2): string => "$" + fmt(v, d);
+
+export const fmtUsdNum = (v: number, d = 2): string => "$" + fmtNum(v, d);
 
 export const short = (a: string): string => a.slice(0, 6) + "…" + a.slice(-4);
 

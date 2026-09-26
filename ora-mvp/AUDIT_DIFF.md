@@ -39,7 +39,11 @@ Internal identifiers and revert strings intentionally retain upstream names
 ## Tier 2 — forks of audited code (read as: upstream + a delta)
 
 Each file is a textual copy of its base with a bounded change set. Review the
-delta, not the file.
+delta, not the file. Behavioral equivalence of the deltas is enforced by
+`test/differential.test.js`: identical op sequences replayed on the v1 engine
+and on the ERC20/wstETH fork, asserting lock-step state (per-trove debt, ICR,
+TCR, SP totals, orUSD supply), revert parity, and conservation invariants
+after every operation — plus exact-MCR restoration for `liquidatePartial`.
 
 | File | Base | Δ lines | Delta content |
 |---|---|---|---|
@@ -83,7 +87,7 @@ valid under both compilers).
 | `rates/HintHelpersRates.sol` | 63 | rate-keyed hints | view-only |
 | `zap/LeverZap.sol` | 225 | per-user leverage proxy (open loop / flash-loan-free unwind / `exec` escape hatch) | owner-gated; closes fully or reverts atomically; sweeps everything to owner |
 | `zap/OraSwapPool.sol` | 83 | demo x·y=k AMM, 0.3% fee (**testnet-only venue**) | k never decreases (fuzzed); no LP withdrawal path by design |
-| `branches/BranchStaking.sol` | 241 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
+| `branches/BranchStaking.sol` | 236 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking; the inherited `_requireCallerIsActivePool` was dropped (upstream's `receive()` ETH gate has no ERC20-collateral counterpart here, so the guard had no caller) |
 | `branches/BranchCommunityIssuance.sol` | 87 | per-branch capped ORA issuance | cap locked at `activate()` |
 | `oracles/ChainlinkPriceFeed.sol` | 140 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
 | `oracles/PythFallbackAggregator.sol` | 80 | Pyth→AggregatorV3 adapter: the Chainlink feed's live fallback source (two-source confirm) | any-expo→8-dec scaling; zero/negative ⇒ answer 0; updatedAt=publishTime (feed heartbeat governs); ctor probe rejects unpublished/bad ids |
@@ -114,11 +118,17 @@ valid under both compilers).
    revert (never strand funds) if an unwind step can't hold ICR; `exec()` is
    the owner escape hatch. Production path: flash-loan unwind.
 5. `aggWeightedDebt` is a display aggregate; subtraction guards absorb dust.
-6. **Slither triage** (CI gates on high severity in Tier 3): the 3 high
-   findings it caught (unchecked `transfer` returns in `BranchStaking`,
-   inherited from the upstream staking pattern) are FIXED with `require`,
-   as is the unchecked compensation `transfer` in `BatchLiquidator`.
-   Remaining medium findings are accepted patterns: `divide-before-multiply`
+6. **Slither triage** (tiered gate, `scripts/slither-gate.js` +
+   `scripts/slither-triage.json`): Tier 3 gates on high severity (the 3
+   historical highs — unchecked `transfer` returns in `BranchStaking` and
+   `BatchLiquidator` — are FIXED with `require`). Tier 2 (the audited-code
+   forks) now gates too: a Tier-2 HIGH fails the build unless the triage
+   entry cites an audited base AND the gate mechanically proves the finding
+   is inherited (same detector on the same function, anchored in Tier 0/1) —
+   a fork-introduced high can never be triaged away; Tier-2 MEDIUMs fail
+   unless triaged in writing. The previous gate excluded Tier 2 entirely via
+   a `--filter-paths` regex that happened to match the fork file names.
+   Remaining Tier-3 mediums are accepted patterns: `divide-before-multiply`
    precision (bounded, 1e18-scaled), vault/wrapper strict `== 0` supply checks
    (standard first-deposit branch), and `reentrancy-no-eth` after
    `transferFrom` of trusted protocol tokens (orUSD/mTBILL revert-on-failure,

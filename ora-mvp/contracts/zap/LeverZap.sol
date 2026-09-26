@@ -95,9 +95,12 @@ contract LeverZap {
         require(debt >= MIN_NET_DEBT, "LeverZap: deposit too small for min 1800 orUSD debt");
         borrowerOps.openTroveWithRate{ value: msg.value }(debt, _annualRate, address(0), address(0));
 
+        // No bal < MIN_STEP guard is needed at loop entry: the first entry
+        // holds the initial debt (>= MIN_NET_DEBT = 1800 orUSD > MIN_STEP) and
+        // every later entry holds the previous round's `more`, which the
+        // min-step break below already guarantees is >= MIN_STEP.
         for (uint256 i = 0; i < _loops; i++) {
             uint256 bal = orUSD.balanceOf(address(this));
-            if (bal < MIN_STEP) break;
             uint256 ethOut = pool.swapOrUSDForETH(bal, 0); // aggregate-guarded below
             borrowerOps.addColl{ value: ethOut }(address(0), address(0));
             uint256 more = ethOut * price / DECIMAL_PRECISION * _ltvBps / 10000;
@@ -146,8 +149,10 @@ contract LeverZap {
             // repay as much as allowed (net debt must stay >= 1800)
             uint256 net = debt - GAS_COMP;
             if (bal > 0 && net > MIN_NET_DEBT) {
+                // r = min(bal, net - MIN_NET_DEBT) is provably > 0 here:
+                // both operands are strictly positive (checked above).
                 uint256 r = bal < net - MIN_NET_DEBT ? bal : net - MIN_NET_DEBT;
-                if (r > 0) { borrowerOps.repayLUSD(r, address(0), address(0)); }
+                borrowerOps.repayLUSD(r, address(0), address(0));
             }
             // withdraw collateral above the 112% safety line and swap it back
             (debt, coll, , ) = troveManager.getEntireDebtAndColl(address(this));

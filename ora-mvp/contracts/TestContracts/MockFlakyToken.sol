@@ -3,49 +3,47 @@
 pragma solidity 0.8.24;
 
 /*
- * ORA Phase 4 — mock tokenized T-bill money-market fund share (mTBILL),
- * standing in for assets like OUSG / BUIDL / tokenized MMFs on testnets.
- *
- * Shares are non-rebasing; value accrues in the fund's NAV per share, which
- * the RWA branch reads through RWAPriceFeed. Real RWA tokens carry KYC
- * transfer restrictions — omitted here so anyone can demo the branch (on a
- * production deployment the protocol pool addresses would simply be
- * allowlisted by the issuer).
+ * Test-only ERC20 with on-demand transfer failures (scaffold — excluded from
+ * the coverage gate). The Tier-3 contracts wrap every external transfer in a
+ * checked `require(token.transfer(...))`; those revert branches are unreachable
+ * with the production tokens (which revert internally instead of returning
+ * false), so they are exercised through this controllable stand-in.
  */
-contract MockTBill {
-    string public constant name = "ORA Tokenized T-Bill Fund (Mock)";
-    string public constant symbol = "mTBILL";
+contract MockFlakyToken {
+    string public constant name = "Flaky Token";
+    string public constant symbol = "FLAKY";
     uint8 public constant decimals = 18;
 
     uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    uint256 public constant FAUCET_CAP = 100000e18;
+    // Failure switches: failTransferFrom kills every transferFrom;
+    // failTransferTo kills transfers to one specific recipient (so a multi-
+    // transfer flow can fail at a chosen step).
+    bool public failTransferFrom;
+    mapping(address => bool) public failTransferTo;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
-    // Test-only switch (scaffold): make transfer/transferFrom return false so
-    // the wrapper's checked-transfer revert branches can be exercised.
-    bool public failTransfers;
-    function setFailTransfers(bool _fail) external { failTransfers = _fail; }
-
     function faucet(uint256 _amount) external {
-        require(_amount <= FAUCET_CAP, "MockTBill: faucet cap is 100000 per call");
         totalSupply = totalSupply + _amount;
         balanceOf[msg.sender] = balanceOf[msg.sender] + _amount;
         emit Transfer(address(0), msg.sender, _amount);
     }
 
+    function setFailTransferFrom(bool _fail) external { failTransferFrom = _fail; }
+    function setFailTransferTo(address _to, bool _fail) external { failTransferTo[_to] = _fail; }
+
     function transfer(address _to, uint256 _value) external returns (bool) {
-        if (failTransfers) { return false; }
+        if (failTransferTo[_to]) { return false; }
         _transfer(msg.sender, _to, _value);
         return true;
     }
 
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool) {
-        if (failTransfers) { return false; }
+        if (failTransferFrom) { return false; }
         allowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;
         _transfer(_from, _to, _value);
         return true;
@@ -58,7 +56,7 @@ contract MockTBill {
     }
 
     function _transfer(address _from, address _to, uint256 _value) internal {
-        require(_to != address(0), "MockTBill: transfer to zero address");
+        require(_to != address(0), "MockFlakyToken: transfer to zero address");
         balanceOf[_from] = balanceOf[_from] - _value;
         balanceOf[_to] = balanceOf[_to] + _value;
         emit Transfer(_from, _to, _value);

@@ -370,6 +370,32 @@ footer { margin-top: 24px; color: var(--muted); font-size: 12px; text-align: cen
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 
+/* Touch ergonomics: coarse pointers (phones/tablets) get ~44px minimum hit
+   areas on every interactive control — WCAG 2.5.5 / Apple HIG territory. */
+@media (pointer: coarse) {
+  .nav-item, .mini, .text-button, .icon-button, .primary, .connect-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .nav-item { padding: 10px 14px; }
+  .primary-nav { gap: 6px; }
+}
+
+/* High-contrast preference: brighten the muted ramp, thicken borders and
+   the focus ring so text and affordances stay distinct without the
+   dark-theme palette's subtle deltas. */
+@media (prefers-contrast: more) {
+  :root {
+    --muted: #d5dce6;
+    --muted-strong: #e8edf4;
+    --line: #4d5c72;
+    --line-strong: #70829c;
+  }
+  .card, select, input { border-width: 2px; }
+  :focus-visible { outline-width: 4px; }
+  .risk-pill, .network-badge, .oracle-badge { border-width: 2px; }
+}
+
 /* Borrow composer, risk hierarchy, market comparisons, and transaction review. */
 :root {
   --safe: #55d49a;

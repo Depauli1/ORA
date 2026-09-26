@@ -1,5 +1,6 @@
 // Pure per-branch selectors over a BranchCfg. The ICR/MCR math decides what
 // the user sees as "safe to borrow" — kept side-effect-free and unit tested.
+import { fmtNum, fmtPct } from "./format";
 import type { BranchCfg } from "./config";
 
 export const isNativeBranch = (b: BranchCfg): boolean => !!b.native;
@@ -44,12 +45,12 @@ export function healthExplanation(
 ): string {
   if (tier === "unknown") return "Waiting for a valid collateral price and position amounts.";
   if (tier === "critical") {
-    return `Below the ${(mcr * 100).toFixed(0)}% minimum collateral ratio. Do not borrow more or withdraw collateral.`;
+    return `Below the ${fmtPct(mcr * 100, 0)} minimum collateral ratio. Do not borrow more or withdraw collateral.`;
   }
   const buffer = marketPrice > 0 && liquidationPrice > 0
     ? Math.max(0, ((marketPrice - liquidationPrice) / marketPrice) * 100)
     : 0;
-  const distance = Number.isFinite(buffer) ? buffer.toFixed(1) : "0.0";
+  const distance = Number.isFinite(buffer) ? fmtNum(buffer, 1) : "0.0";
   return tier === "caution"
     ? `Only about ${distance}% collateral-price decline to the liquidation threshold. Consider adding collateral or borrowing less.`
     : `Healthy buffer: about ${distance}% collateral-price decline to the liquidation threshold. Keep monitoring market conditions.`;
@@ -118,13 +119,13 @@ export function adjustmentPreviews(
       reason = "This amount would leave the Trove with no collateral or debt.";
       executable = false;
     } else if (action === "repay" && nextDebt < minNetDebt + 200) {
-      reason = `Would leave less than the ${minNetDebt.toLocaleString("en-US")} orUSD minimum net debt; close the Trove instead.`;
+      reason = `Would leave less than the ${fmtNum(Number(minNetDebt))} orUSD minimum net debt; close the Trove instead.`;
       executable = false;
     } else if ((action === "withdraw" || action === "borrow") && !healthSafe) {
-      reason = `Would leave the Trove below the ${(mcr * 100).toFixed(0)}% minimum collateral ratio.`;
+      reason = `Would leave the Trove below the ${fmtPct(mcr * 100, 0)} minimum collateral ratio.`;
       executable = false;
     } else if (!healthSafe) {
-      reason = `This improves the Trove, but it would remain below the ${(mcr * 100).toFixed(0)}% minimum ratio.`;
+      reason = `This improves the Trove, but it would remain below the ${fmtPct(mcr * 100, 0)} minimum ratio.`;
     }
     return { collateral: nextCollateral, debt: nextDebt, icr, liquidationPrice, risk, executable, healthSafe, reason };
   };

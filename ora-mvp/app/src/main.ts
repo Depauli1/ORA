@@ -2,7 +2,7 @@
 // browser; under vitest the suites drive boot() explicitly per test.
 import "./styles.css";
 import { NETWORKS } from "./config";
-import { state } from "./state";
+import { state, BASE_POLL_MS, nextPollDelayMs } from "./state";
 import { canUseDemo } from "./wallet-gate";
 import { initWalletDiscovery } from "./wallet";
 import { loadConfig, setNetwork } from "./network";
@@ -37,21 +37,62 @@ export function installErrorHooks(): void {
     reportError("unhandledrejection", (e.reason?.message || e.reason) ?? "unknown", e.reason?.stack));
 }
 
+// Adaptive polling scheduler. One refresh = one ~22-call RPC batch, so the
+// cadence is a quota decision, not just a freshness knob:
+//   - healthy: fixed BASE_POLL_MS (8s)
+//   - failing: exponential backoff, capped at MAX_POLL_MS (60s) — the
+//     stale-data lockout (views.ts) already pauses risk-increasing actions,
+//     so backing off never trades safety for quota
+//   - tab hidden: no RPC at all; an immediate catch-up refresh on return
+let pollDelayMs = BASE_POLL_MS;
+let visibilityHookInstalled = false;
+
+function schedulePoll(): void {
+  if (state.refreshTimer) clearTimeout(state.refreshTimer);
+  state.refreshTimer = setTimeout(() => void poll(), pollDelayMs);
+}
+
+async function poll(): Promise<void> {
+  state.refreshTimer = null;
+  if (document.hidden) return schedulePoll(); // no RPC while hidden
+  updateDataFreshness();
+  if (!state.busy) {
+    const ok = await refresh();
+    pollDelayMs = nextPollDelayMs(pollDelayMs, ok);
+  }
+  schedulePoll();
+}
+
+function installVisibilityHook(): void {
+  if (visibilityHookInstalled) return;
+  visibilityHookInstalled = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || state.busy || !state.networkReady) return;
+    pollDelayMs = BASE_POLL_MS; // catch up immediately on return
+    void poll();
+  });
+}
+
 export async function boot(hostname: string = location.hostname): Promise<void> {
   installErrorHooks();
   state.reset(hostname);
   hydrateActivity();
+  // Wire controls BEFORE the awaited network bootstrap: setNetwork() paints
+  // "Local demo"/"ready" while its deployment fetch + first refresh are still
+  // in flight, and a user (or e2e) interacting in that window would dispatch
+  // change/click events into a not-yet-wired UI — the event is silently lost
+  // and the app looks frozen. Handlers all guard on network-ready state, so
+  // early wiring is safe; wiring late is not.
+  wireActions();
   initWalletDiscovery();
   await loadConfig();
   // Localhost keeps the local demo default. The hosted Arena preview may use
   // it only when its server explicitly opts in; all other public hosts remain
   // on the published-network path.
   await setNetwork(canUseDemo(hostname, state.appConfig.previewDemo) ? "local" : "baseSepolia");
-  wireActions();
-  state.refreshTimer = setInterval(() => {
-    updateDataFreshness();
-    if (!state.busy) void refresh();
-  }, 8000);
+  installVisibilityHook();
+  pollDelayMs = BASE_POLL_MS;
+  schedulePoll();
 }
 
 // Auto-boot in the browser only — under vitest (MODE=test) the suites drive

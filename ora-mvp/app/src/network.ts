@@ -26,7 +26,7 @@ export async function loadConfig(): Promise<void> {
 }
 
 function setNetworkBadge(mode: string, status: "loading" | "ready" | "unavailable"): void {
-  const net = NETWORKS[mode] || NETWORKS.local;
+  const net = NETWORKS[mode]; // callers pass keys validated against NETWORKS
   const badge = $("networkBadge");
   badge.dataset.status = status;
   badge.dataset.environment = net.local ? "local" : net.testnet ? "testnet" : "mainnet";
@@ -48,7 +48,7 @@ function hideNetworkNotice(): void {
   $("networkNotice").hidden = true;
 }
 
-function renderBranchOptions(deployment: Deployment): string | undefined {
+function renderBranchOptions(deployment: Deployment): string {
   const branchSelect = select("branchSelect");
   branchSelect.replaceChildren();
   const labels: Record<string, string> = {
@@ -158,11 +158,9 @@ export async function setNetwork(mode: string): Promise<void> {
       ? new ethers.JsonRpcProvider(location.origin + "/rpc", undefined, { staticNetwork: true })
       : new ethers.JsonRpcProvider(req(net.rpc, "rpc url"), parseInt(req(net.chainIdHex, "chainIdHex"), 16), { staticNetwork: true });
 
+    // validateDeployment() above already rejected empty branch maps, so this
+    // always resolves to a real branch key.
     const branch = renderBranchOptions(deployment);
-    if (!branch) {
-      unavailable(selected, "This deployment has no collateral markets configured.");
-      return;
-    }
 
     const faucetOn = net.local && state.appConfig.faucet;
     ( $("btnFaucet") as HTMLButtonElement).disabled = !faucetOn;

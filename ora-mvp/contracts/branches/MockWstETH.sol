@@ -20,9 +20,19 @@ contract MockWstETH {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
+    // Test-only knobs (scaffold): controllable stEthPerToken so the wstETH
+    // oracle's failure branches (zero rate / reverting rate source) can be
+    // exercised. Defaults reproduce the historical 1.2 ETH per wstETH.
+    uint256 private _stEthPerToken = 12e17;
+    bool private _revertPerToken;
+
+    function setStEthPerToken(uint256 _value) external { _stEthPerToken = _value; }
+    function setRevertPerToken(bool _revert) external { _revertPerToken = _revert; }
+
     // Mock exchange rate: 1 wstETH ~ 1.2 ETH (informational only)
-    function stEthPerToken() external pure returns (uint256) {
-        return 12e17;
+    function stEthPerToken() external view returns (uint256) {
+        require(!_revertPerToken, "MockWstETH: stEthPerToken unavailable");
+        return _stEthPerToken;
     }
 
     function faucet(uint256 _amount) external {
