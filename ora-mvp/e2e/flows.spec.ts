@@ -52,7 +52,12 @@ test("redemption flow burns orUSD through the hint pipeline", async ({ page }) =
   // completes (an early check would wrongly try to open an existing trove).
   const troveActive = page.locator("#troveActive");
   const openBtn = page.locator("#btnOpen");
-  await expect(troveActive.or(openBtn)).toBeVisible({ timeout: 30_000 });
+  // Both elements exist in the DOM at all times (hidden or disabled), so a
+  // strict-mode locator wait would resolve to two elements — poll booleans
+  // instead until the first refresh reveals exactly one of them.
+  await expect
+    .poll(async () => (await troveActive.isVisible()) || (await openBtn.isVisible()), { timeout: 30_000 })
+    .toBe(true);
   if (!(await troveActive.isVisible())) {
     await page.click("#btnOpen");
     await expect(page.locator("#txReviewDialog")).toBeVisible();
