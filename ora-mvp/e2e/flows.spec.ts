@@ -46,17 +46,20 @@ test("redemption flow burns orUSD through the hint pipeline", async ({ page }) =
   // A funded trove is needed so there is debt to redeem against and orUSD in
   // the wallet (the bootstrap warp in e2e-up.sh clears the 14-day redemption
   // gate for the whole chain). app.spec's open flow runs first on the same
-  // chain and account, so a trove — and the open form's hiding once it is
-  // active — must both be tolerated: only open when none is active yet.
-  if (!(await page.locator("#troveActive").isVisible())) {
-    await page.getByRole("button", { name: "Borrow" }).click();
-    await expect(page.locator("#viewBorrow")).toBeVisible();
+  // chain and account, so a trove may already be active — and the open form
+  // hides once it is. Wait for the first refresh to settle before deciding:
+  // isVisible() is instant, and the position is not loaded until the refresh
+  // completes (an early check would wrongly try to open an existing trove).
+  const troveActive = page.locator("#troveActive");
+  const openBtn = page.locator("#btnOpen");
+  await expect(troveActive.or(openBtn)).toBeVisible({ timeout: 30_000 });
+  if (!(await troveActive.isVisible())) {
     await page.click("#btnOpen");
     await expect(page.locator("#txReviewDialog")).toBeVisible();
     await page.click("#reviewConfirm");
     await expect(page.locator("#toast")).toContainText("Open Trove confirmed", { timeout: 60_000 });
   }
-  await expect(page.locator("#troveActive")).toBeVisible({ timeout: 30_000 });
+  await expect(troveActive).toBeVisible({ timeout: 30_000 });
 
   // Markets view → redeem 100 orUSD (goes through getRedemptionHints →
   // getApproxHint → findInsertPosition before redeemCollateral).
