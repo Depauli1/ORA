@@ -157,7 +157,7 @@ jobs:
           SCAN_N: "500"
 
   coverage:
-    name: Coverage gate (Tier 3: 100% lines, >=99.7% branches)
+    name: "Coverage gate (Tier 3: 100% lines, >=99.7% branches)"
     runs-on: ubuntu-latest
     defaults:
       run:
