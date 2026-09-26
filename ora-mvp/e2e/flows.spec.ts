@@ -51,13 +51,12 @@ test("redemption flow burns orUSD through the hint pipeline", async ({ page }) =
   // isVisible() is instant, and the position is not loaded until the refresh
   // completes (an early check would wrongly try to open an existing trove).
   const troveActive = page.locator("#troveActive");
-  const openBtn = page.locator("#btnOpen");
-  // Both elements exist in the DOM at all times (hidden or disabled), so a
-  // strict-mode locator wait would resolve to two elements — poll booleans
-  // instead until the first refresh reveals exactly one of them.
-  await expect
-    .poll(async () => (await troveActive.isVisible()) || (await openBtn.isVisible()), { timeout: 30_000 })
-    .toBe(true);
+  // Wait for the app to settle after boot before deciding: the first refresh
+  // loads the (possibly already active) position, and the open form is only
+  // hidden once that lands — an earlier isVisible() check races it and the
+  // click would then wait forever on a form the app has just hidden.
+  await expect(page.locator("#dataFreshness"))
+    .toContainText("On-chain data updated", { timeout: 30_000 });
   if (!(await troveActive.isVisible())) {
     await page.click("#btnOpen");
     await expect(page.locator("#txReviewDialog")).toBeVisible();
