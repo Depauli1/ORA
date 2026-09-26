@@ -63,11 +63,11 @@ class Store {
   troveRows = 50;
   discoveredWallets: WalletDiscovery[] = [];
   appConfig: AppConfig = { ...DEFAULT_CONFIG };
-  refreshTimer: ReturnType<typeof setInterval> | null = null;
+  refreshTimer: ReturnType<typeof setTimeout> | null = null;
   discoveryInstalled = false;
 
   reset(hostname: string): void {
-    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.provider = null;
     this.wallet = null;
     this.dep = null;
@@ -101,6 +101,20 @@ class Store {
 export const state = new Store();
 
 export const MAX_MARKET_DATA_AGE_MS = 30_000;
+
+// --- adaptive polling ---------------------------------------------------------
+// Each refresh is a ~22-call RPC batch. At demo scale a fixed 8s interval is
+// fine; on public RPCs the per-client quota cost becomes a product concern,
+// so the scheduler (main.ts) pauses entirely while the tab is hidden and
+// backs off exponentially while refreshes keep failing.
+export const BASE_POLL_MS = 8_000;
+export const MAX_POLL_MS = 60_000;
+
+/** Pure delay step: healthy -> base cadence; failing -> double, capped. */
+export function nextPollDelayMs(prev: number, ok: boolean): number {
+  if (ok) return BASE_POLL_MS;
+  return Math.min(Math.max(prev, BASE_POLL_MS) * 2, MAX_POLL_MS);
+}
 
 export function hasFreshMarketData(now = Date.now()): boolean {
   if (state.lastRefreshAt === null || state.lastRefreshError) return false;

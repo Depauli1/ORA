@@ -1,16 +1,17 @@
 # ORA continuous integration (8 jobs): Hardhat suite + Slither + Foundry
 # invariants + oracle prod-config gate + Base Sepolia fork reads + keeper
 # scan load test + Tier-3 coverage gate + frontend (typecheck, build,
-# vitest, Playwright e2e). The Slither gate fails the build on
-# high-severity findings in the NEW ORA contracts (zap, WTBill, vault/router,
-# oracles, branch staking/issuance); the audited upstream Liquity core and its
-# textual parameter forks are reported informationally but do not gate (their
-# findings are upstream patterns accepted by Liquity's audits).
+# vitest, Playwright e2e). The Slither gate classifies findings by tier:
+# Tier 3 (new ORA code) fails on high severity; Tier 2 (forks of audited
+# Liquity code — the fork-kill-zone) fails on high unless the finding is
+# mechanically PROVEN inherited from an audited base file and triaged, and
+# fails on medium unless triaged in scripts/slither-triage.json. The audited
+# upstream core (Tier 0/1) is reported informationally.
 name: CI
 
 on:
   push:
-    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora"]
+    branches: ["arena/01a0d2bf-ora", "arena/01a0d469-ora", "arena/01a0d969-ora"]
     paths-ignore:
       - "ora-mvp/.deploy-testnet-trigger"
       - "ora-mvp/app/deployment-baseSepolia.json"
@@ -74,12 +75,11 @@ jobs:
             echo
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Gate — no high-severity findings in new ORA contracts
+      - name: "Tier gate — T3 high fails; T2 (audited-code forks) high fails unless provably inherited from an audited base, medium must be triaged (scripts/slither-triage.json)"
         run: |
-          slither . --ignore-compile --compile-force-framework Hardhat --json slither-gate.json \
-            --filter-paths "node_modules|Dependencies/|Interfaces/|TestContracts/|LQTY/|Proxy|TroveManager|BorrowerOperations|StabilityPool|ActivePool|DefaultPool|CollSurplusPool|HintHelpers|SortedTroves|MultiTroveGetter|GasPool|LUSDToken|Migrations|LiquityBaseRWA" \
+          slither . --ignore-compile --compile-force-framework Hardhat --json slither-all.json \
             || true
-          node scripts/slither-gate.js slither-gate.json
+          node scripts/slither-gate.js slither-all.json
       - name: Upload full report
         if: always()
         uses: actions/upload-artifact@v4
@@ -192,8 +192,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vite build
-      - name: Vitest (server + UI suites)
-        run: npx vitest run app/test/
+      - name: Vitest (server + UI suites, coverage)
+        run: npx vitest run app/test/ --coverage
+      - name: JS coverage gate (ratchets — raise, never lower)
+        run: node scripts/js-coverage-gate.js
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - name: Playwright e2e (fresh chain + deploy + app server)

@@ -14,7 +14,7 @@ import { addActivity, updateActivity } from "./activity";
 import { setNetwork } from "./network";
 import { refresh, setBranch, setView, updateOpenPreview, updateAdjustmentPreview, refreshTrovesTable, riskIncreaseBlockMessage } from "./views";
 import { $, input, select, toast } from "./dom";
-import { fmt } from "./format";
+import { fmt, fmtNum, fmtPct, fmtUsdNum } from "./format";
 import { adjustmentPreviews, healthExplanation, healthTier, openPreview as calculateOpenPreview } from "./branch";
 import { reviewTransaction } from "./review";
 import type { Eip1193 } from "./state";
@@ -78,7 +78,7 @@ function projectAdjustment(kind: "borrow" | "withdraw", amount: bigint, fee = 0n
 
 function reviewPrice(value: number): string {
   return Number.isFinite(value) && value > 0
-    ? "$" + value.toLocaleString("en-US", { maximumFractionDigits: 2 })
+    ? fmtUsdNum(value)
     : "Unavailable";
 }
 
@@ -157,7 +157,7 @@ export function wireActions(): void {
       Number(ethers.formatEther(coll)), Number(ethers.formatEther(debt)),
       rates ? 0n : state.borrowingRate, state.price, brMcr(),
     );
-    if (calculation.icr < brMcr() * 100) return toast(`Projected collateral ratio is below the ${(brMcr() * 100).toFixed(0)}% minimum.`);
+    if (calculation.icr < brMcr() * 100) return toast(`Projected collateral ratio is below the ${fmtPct(brMcr() * 100, 0)} minimum.`);
     const network = NETWORKS[state.netMode]?.label || state.netMode;
     const label = rates ? `Open Trove @ ${pct}%` : "Open Trove";
     const riskMessage = healthExplanation(
@@ -168,8 +168,8 @@ export function wireActions(): void {
       { label: "Borrow amount", value: `${fmt(debt)} orUSD` },
       { label: "Borrowing fee", value: rates ? "No upfront fee" : `${fmt(fee)} orUSD` },
       ...(rates ? [{ label: "Annual interest rate", value: `${pct}% / year` }] : []),
-      { label: "Projected total debt", value: `${calculation.totalDebt.toLocaleString("en-US", { maximumFractionDigits: 2 })} orUSD, including 200 orUSD gas compensation` },
-      { label: "Projected collateral ratio", value: `${calculation.icr.toFixed(1)}%` },
+      { label: "Projected total debt", value: `${fmtNum(calculation.totalDebt)} orUSD, including 200 orUSD gas compensation` },
+      { label: "Projected collateral ratio", value: fmtPct(calculation.icr) },
       { label: "Liquidation price", value: reviewPrice(calculation.liquidationPrice) },
       { label: "Network gas", value: "Estimated by your wallet at signing" },
     ];
@@ -269,9 +269,9 @@ export function wireActions(): void {
       riskMessage,
       details: [
         { label: "Withdraw", value: `${fmt(amount, 4)} ${collSym()}` },
-        { label: "Collateral remaining", value: `${projection.collateral.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${collSym()}` },
-        { label: "Debt after action", value: `${projection.debt.toLocaleString("en-US", { maximumFractionDigits: 2 })} orUSD` },
-        { label: "Projected collateral ratio", value: `${projection.icr.toFixed(1)}%` },
+        { label: "Collateral remaining", value: `${fmtNum(projection.collateral, 4)} ${collSym()}` },
+        { label: "Debt after action", value: `${fmtNum(projection.debt)} orUSD` },
+        { label: "Projected collateral ratio", value: fmtPct(projection.icr) },
         { label: "Liquidation price", value: reviewPrice(projection.liquidationPrice) },
         { label: "Protocol / network fee", value: "No protocol fee; network gas estimated by your wallet" },
       ],
@@ -315,8 +315,8 @@ export function wireActions(): void {
       details: [
         { label: "Borrow amount", value: `${fmt(amount)} orUSD` },
         { label: "Borrowing fee", value: isRates() ? "No upfront fee" : `${fmt(fee)} orUSD` },
-        { label: "Projected total debt", value: `${projection.debt.toLocaleString("en-US", { maximumFractionDigits: 2 })} orUSD` },
-        { label: "Collateral ratio after borrowing", value: `${projection.icr.toFixed(1)}%` },
+        { label: "Projected total debt", value: `${fmtNum(projection.debt)} orUSD` },
+        { label: "Collateral ratio after borrowing", value: fmtPct(projection.icr) },
         { label: "Liquidation price", value: reviewPrice(projection.liquidationPrice) },
         { label: "Network gas", value: "Estimated by your wallet at signing" },
       ],
@@ -462,7 +462,7 @@ export function wireActions(): void {
     if (!(state.price > 0)) return toast("Waiting for a valid market price before opening.");
     const firstBorrow = collEth * state.price * Number(ltvBps) / 10000;
     if (firstBorrow < 1800) {
-      return toast(`Deposit too small: the first loop must borrow at least 1,800 orUSD. At this leverage, try about ${(1800 * 10000 / Number(ltvBps) / state.price).toFixed(2)} ETH or more.`, 8000);
+      return toast(`Deposit too small: the first loop must borrow at least 1,800 orUSD. At this leverage, try about ${fmtNum(1800 * 10000 / Number(ltvBps) / state.price, 2)} ETH or more.`, 8000);
     }
     let zap = await myZap();
     if (zap) {
@@ -486,9 +486,9 @@ export function wireActions(): void {
       riskMessage,
       details: [
         { label: "ETH deposit", value: `${fmt(collWei, 4)} ETH` },
-        { label: "First borrow (approx.)", value: `${firstBorrow.toLocaleString("en-US", { maximumFractionDigits: 2 })} orUSD` },
-        { label: "Per-loop LTV / target leverage", value: `${(Number(ltvBps) / 100).toFixed(2)}% / ~${leverage.toFixed(1)}×` },
-        { label: "Projected ratio (approx.)", value: `${projectedIcr.toFixed(1)}% before swap impact` },
+        { label: "First borrow (approx.)", value: `${fmtNum(firstBorrow)} orUSD` },
+        { label: "Per-loop LTV / target leverage", value: `${fmtPct(Number(ltvBps) / 100, 2)} / ~${fmtNum(leverage, 1)}×` },
+        { label: "Projected ratio (approx.)", value: `${fmtPct(projectedIcr)} before swap impact` },
         { label: "Liquidation price (approx.)", value: reviewPrice(liquidationPrice) },
         { label: "Interest rate", value: `${ratePct}% / year; no upfront borrowing fee` },
         { label: "Maximum equity loss", value: `${slipPct}% aggregate slippage guard` },
@@ -513,7 +513,7 @@ export function wireActions(): void {
       }
     }
     const slipBps = BigInt(Math.round(slipPct * 100));
-    const label = `Open ~${leverage.toFixed(1)}× leveraged position`;
+    const label = `Open ~${fmtNum(leverage, 1)}× leveraged position`;
     void tx(label, () =>
       (zap as ethers.Contract).leverOpen(ethers.parseEther((ratePct / 100).toFixed(6)), ltvBps, 6n, slipBps,
         { value: collWei }));
@@ -573,9 +573,9 @@ export function wireActions(): void {
   // 50% deviation guard — exactly how a real market crash would look.
   const setEthUsd = async (v: number) => {
     const answer = BigInt(Math.round(v * 1e8));
-    if (state.C.aggEthFb && !(await tx(`Set fallback ETH/USD to $${v.toFixed(0)}`, () =>
+    if (state.C.aggEthFb && !(await tx(`Set fallback ETH/USD to ${fmtUsdNum(v, 0)}`, () =>
       state.C.aggEthFb.setAnswer(answer)))) return;
-    await tx(`Set ETH/USD to $${v.toFixed(0)}`, () => state.C.aggEth.setAnswer(answer));
+    await tx(`Set ETH/USD to ${fmtUsdNum(v, 0)}`, () => state.C.aggEth.setAnswer(answer));
   };
   document.querySelectorAll<HTMLButtonElement>("button[data-bump]").forEach((b) =>
     b.addEventListener("click", async () => {
