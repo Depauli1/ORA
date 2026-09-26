@@ -51,8 +51,8 @@ function amountFromInput(id: string, name: string): bigint | null {
 }
 
 function inputAmount(value: bigint): string {
-  const formatted = ethers.formatEther(value);
-  return formatted.includes(".") ? formatted.replace(/0+$/, "").replace(/\.$/, "") : formatted;
+  // formatEther always renders a fractional part, so the trim is always safe
+  return ethers.formatEther(value).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function collateralMax(): bigint {
@@ -76,7 +76,7 @@ function projectAdjustment(kind: "borrow" | "withdraw", amount: bigint, fee = 0n
   return projections[kind];
 }
 
-function reviewPrice(value: number): string {
+export function reviewPrice(value: number): string {
   return Number.isFinite(value) && value > 0
     ? fmtUsdNum(value)
     : "Unavailable";
@@ -253,9 +253,9 @@ export function wireActions(): void {
     if (!requireRiskIncreaseAllowed("Withdrawing collateral")) return;
     const amount = adjColl("collateral amount");
     if (amount === null) return;
-    if (!state.position) return toast("No active Trove on this market.");
-    const projection = projectAdjustment("withdraw", amount);
-    if (!projection?.executable) return toast(projection?.reason || "Could not calculate the projected position.");
+    const projection = state.position ? projectAdjustment("withdraw", amount) : null;
+    if (!projection) return toast("No active Trove on this market.");
+    if (!projection.executable) return toast(projection.reason);
 
     const network = NETWORKS[state.netMode]?.label || state.netMode;
     const riskMessage = healthExplanation(

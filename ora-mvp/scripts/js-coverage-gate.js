@@ -4,10 +4,8 @@
 // Reads coverage/coverage-summary.json produced by:
 //   npx vitest run app/test/ --coverage
 // and enforces the TOTAL floors plus per-file floors below. When coverage
-// improves, raise the numbers here; never lower them. The goal is 100% on
-// every metric — the ratchets below are the current best and tighten as the
-// remaining hard-to-reach branches (auto-boot side effects, third-party
-// import fallbacks) get exercised.
+// improves, raise the numbers here; never lower them. Every file now sits at
+// 100% on all four metrics; keep it there.
 "use strict";
 
 const fs = require("node:fs");
@@ -25,26 +23,26 @@ const METRICS = ["lines", "branches", "functions", "statements"];
 
 // [lines, branches, functions, statements] floors per measured file.
 const RATCHETS = {
-  "app/src/actions.ts": [97, 84, 96, 93],
-  "app/src/activity.ts": [100, 90, 100, 99],
-  "app/src/branch.ts": [92, 96, 100, 93],
+  "app/src/actions.ts": [100, 100, 100, 100],
+  "app/src/activity.ts": [100, 100, 100, 100],
+  "app/src/branch.ts": [100, 100, 100, 100],
   "app/src/config.ts": [100, 100, 100, 100],
-  "app/src/contracts.ts": [100, 95, 100, 100],
+  "app/src/contracts.ts": [100, 100, 100, 100],
   "app/src/dom.ts": [100, 100, 100, 100],
   "app/src/faucet.ts": [100, 100, 100, 100],
   "app/src/format.ts": [100, 100, 100, 100],
-  "app/src/main.ts": [97, 88, 83, 91],
-  "app/src/network.ts": [97, 82, 100, 96],
-  "app/src/review.ts": [100, 76, 100, 97],
+  "app/src/main.ts": [100, 100, 100, 100],
+  "app/src/network.ts": [100, 100, 100, 100],
+  "app/src/review.ts": [100, 100, 100, 100],
   "app/src/state.ts": [100, 100, 100, 100],
-  "app/src/views.ts": [100, 91, 100, 100],
+  "app/src/views.ts": [100, 100, 100, 100],
   "app/src/wallet-gate.ts": [100, 100, 100, 100],
-  "app/src/wallet.ts": [99, 93, 100, 99],
-  "app/src/walletconnect.ts": [93, 66, 100, 91],
+  "app/src/wallet.ts": [100, 100, 100, 100],
+  "app/src/walletconnect.ts": [100, 100, 100, 100],
   "server-lib.js": [100, 100, 100, 100],
   "server.js": [100, 100, 100, 100],
 };
-const TOTAL = [98, 90, 98, 97];
+const TOTAL = [100, 100, 100, 100];
 
 let failed = false;
 const failures = [];

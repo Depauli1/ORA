@@ -708,11 +708,16 @@ export async function refreshTrovesTable(): Promise<void> {
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll<HTMLButtonElement>("button[data-liq]").forEach((b) =>
-    b.addEventListener("click", () =>
-      tx("Liquidate " + short(b.dataset.liq ?? ""), () => C.troveManager.liquidate(b.dataset.liq)))
+    b.addEventListener("click", () => {
+      // the selector guarantees the attribute exists on these buttons
+      const owner = b.dataset.liq as string;
+      tx("Liquidate " + short(owner), () => C.troveManager.liquidate(owner));
+    })
   );
   tbody.querySelectorAll<HTMLButtonElement>("button[data-softliq]").forEach((b) =>
-    b.addEventListener("click", () =>
-      tx("Soft-liquidate " + short(b.dataset.softliq ?? ""), () => C.troveManager.liquidatePartial(b.dataset.softliq)))
+    b.addEventListener("click", () => {
+      const owner = b.dataset.softliq as string; // see [data-liq] above
+      tx("Soft-liquidate " + short(owner), () => C.troveManager.liquidatePartial(owner));
+    })
   );
 }

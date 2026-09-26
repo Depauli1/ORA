@@ -11,7 +11,12 @@ import { state, myAddr } from "../src/state";
 import { setBranch } from "../src/views";
 
 const APP = path.join(__dirname, "..");
-export const html = fs.readFileSync(path.join(APP, "index.html"), "utf8");
+export let html = fs.readFileSync(path.join(APP, "index.html"), "utf8");
+
+/** Swap the index.html served by subsequent bootApp() calls (restore after!). */
+export function setServedHtml(next: string): void {
+  html = next;
+}
 export const deployment = JSON.parse(fs.readFileSync(path.join(APP, "deployment.json"), "utf8"));
 export const E = ethers.parseEther;
 
