@@ -172,7 +172,12 @@
       HIGHs can never be triaged away, inherited HIGHs must be *mechanically
       proven* against the audited base, MEDIUMs need written triage. Foundry
       nightly fuzz campaign (10k runs × depth 100) on cron. Tier-3 coverage
-      gate ratcheted to 95% lines / 75% branches (measured: 98.6 / 80.1).
+      gate ratcheted to 100% lines / 99.7% branches (measured: 100.00 /
+      99.73; the sole uncovered branch is the OraSwapPool mainnet chain-id
+      backstop, unreachable on any test chain by design). Failure paths are
+      driven through a controllable scaffold token (`MockFlakyToken`),
+      ETH-rejecting receivers (`EthRejector`) and lying-counterparty mocks
+      (`HostileZapStack`) for the zap's aggregate guards.
 - [ ] Audit diff vs. upstream Liquity (kept deliberately small: 4 rebrand lines +
       ~40 lines multi-branch orUSD; branch pool suite is new isolated code)
 

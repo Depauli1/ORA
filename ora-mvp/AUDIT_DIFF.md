@@ -87,7 +87,7 @@ valid under both compilers).
 | `rates/HintHelpersRates.sol` | 63 | rate-keyed hints | view-only |
 | `zap/LeverZap.sol` | 225 | per-user leverage proxy (open loop / flash-loan-free unwind / `exec` escape hatch) | owner-gated; closes fully or reverts atomically; sweeps everything to owner |
 | `zap/OraSwapPool.sol` | 83 | demo x·y=k AMM, 0.3% fee (**testnet-only venue**) | k never decreases (fuzzed); no LP withdrawal path by design |
-| `branches/BranchStaking.sol` | 241 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking |
+| `branches/BranchStaking.sol` | 236 | per-branch ORA staking (ERC20 fee gains) | fee accounting mirrors LQTYStaking; the inherited `_requireCallerIsActivePool` was dropped (upstream's `receive()` ETH gate has no ERC20-collateral counterpart here, so the guard had no caller) |
 | `branches/BranchCommunityIssuance.sol` | 87 | per-branch capped ORA issuance | cap locked at `activate()` |
 | `oracles/ChainlinkPriceFeed.sol` | 140 | Chainlink adapter w/ staleness fallback + **L2 sequencer guard** | constructor reverts on invalid/stale feed or sequencer outage |
 | `oracles/PythFallbackAggregator.sol` | 80 | Pyth→AggregatorV3 adapter: the Chainlink feed's live fallback source (two-source confirm) | any-expo→8-dec scaling; zero/negative ⇒ answer 0; updatedAt=publishTime (feed heartbeat governs); ctor probe rejects unpublished/bad ids |

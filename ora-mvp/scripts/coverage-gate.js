@@ -1,11 +1,13 @@
-// ORA coverage gate — Tier 3 (wholly new ORA code) must hold >=95% line and
-// >=75% branch coverage. Tier 0/1/2 (audited/upstream-derived) are reported,
-// not gated (their assurance comes from the upstream audits + the
-// differential suite, not line coverage).
+// ORA coverage gate — Tier 3 (wholly new ORA code) must hold 100% line and
+// function coverage and >=99.7% branch coverage. Tier 0/1/2
+// (audited/upstream-derived) are reported, not gated (their assurance comes
+// from the upstream audits + the differential suite, not line coverage).
 //
-// Thresholds are ratchets: measured 2026-09 at 98.61% lines / 80.05% branches
-// — gates sit a few points below so ordinary churn doesn't trip them, but a
-// new Tier-3 file with weak tests will. Raise them as coverage improves.
+// Thresholds are ratchets: measured 2026-09 at 100.00% lines / 99.73%
+// branches / 100.00% functions. The only uncovered branch is the OraSwapPool
+// mainnet backstop (chain id 1/8453 deploy refusal), which by design cannot
+// fire on any test chain — Hardhat cannot switch chain ids and forks keep the
+// locally configured one. Raise the floors as coverage improves; never lower.
 //
 //   COVERAGE=1 npx hardhat coverage && node scripts/coverage-gate.js
 //   (or: npm run coverage)
@@ -13,8 +15,8 @@ const fs = require("fs");
 const path = require("path");
 
 const COV = path.join(__dirname, "..", "coverage.json");
-const MIN_TIER3_LINES = 95;
-const MIN_TIER3_BRANCHES = 75;
+const MIN_TIER3_LINES = 100;
+const MIN_TIER3_BRANCHES = 99.7;
 
 // Tier 3 = everything in these dirs/files (see AUDIT_DIFF.md Tier 3).
 const TIER3 = [
