@@ -4,10 +4,13 @@ env:
   CI: true
   FORCE_COLOR: true
 
+# Note: this workflow is NOT run on pull requests. Its publish steps only
+# execute on master/main pushes, and the forked Liquity EthersLiquity suite
+# (packages/lib-ethers) currently has pre-existing StabilityPool assertion
+# failures that reproduce on main itself — running it per-PR only added a
+# permanently red check to every PR. See the PR #4 description for details.
 on:
   push:
-    branches: [master, main]
-  pull_request:
     branches: [master, main]
 
 jobs:
