@@ -17,14 +17,24 @@ test("boot, live data, faucet drip, open trove", async ({ page }) => {
   await expect(page.locator("#stEthPrice")).not.toHaveText("—", { timeout: 30_000 });
   expect(await page.locator("#stEthPrice").textContent()).toMatch(/\$/);
 
-  // server faucet drip via the UI (100 ORA from the treasury key)
+  // server faucet drip via the UI (100 ORA from the treasury key). The
+  // test-token faucet lives in the "Stake ORA" card on the EARN view (it
+  // funds staking) — the app boots into the Borrow view, so switch first.
+  await page.getByRole("button", { name: "Earn" }).click();
+  await expect(page.locator("#viewEarn")).toBeVisible();
   await expect(page.locator("#faucetRow")).toBeVisible();
   await page.click("#btnFaucet");
   await expect(page.locator("#toast")).toContainText("on the way", { timeout: 30_000 });
   await expect(page.locator("#balOra")).toContainText("100", { timeout: 30_000 });
 
-  // open a trove with the UI defaults (5 ETH / 4000 orUSD)
+  // open a trove with the UI defaults (5 ETH / 4000 orUSD): the review
+  // dialog interposes before the wallet (pre-flight + review step)
+  await page.getByRole("button", { name: "Borrow" }).click();
+  await expect(page.locator("#viewBorrow")).toBeVisible();
   await page.click("#btnOpen");
+  await expect(page.locator("#txReviewDialog")).toBeVisible();
+  await expect(page.locator("#reviewRows")).toContainText("Projected total debt");
+  await page.click("#reviewConfirm");
   await expect(page.locator("#toast")).toContainText("Open Trove confirmed", { timeout: 60_000 });
   await expect(page.locator("#troveActive")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#tvDebt")).toContainText("orUSD", { timeout: 30_000 });

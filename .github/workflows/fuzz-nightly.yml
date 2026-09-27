@@ -1,0 +1,55 @@
+# ORA nightly fuzz campaign — the deep end of the invariant strategy.
+#
+# CI (ci.yml) runs the Foundry invariant suites at 256 runs × depth 24: fast
+# regression detection on every push. That is deliberately shallow. This
+# workflow runs the SAME suites under the `nightly` profile
+# (foundry.toml: 10,000 runs × depth 100, fail_on_revert) — roughly 40× the
+# state coverage per suite — on a schedule, so rare handler-state paths get
+# searched for without slowing down PR iteration.
+#
+# Triggers:
+#  - cron nightly at 02:33 UTC (NOTE: GitHub only schedules workflows from
+#    the DEFAULT branch — the cron activates once this lands on main)
+#  - workflow_dispatch (run the deep campaign on demand from any branch)
+#  - push to ora-mvp/.fuzz-trigger (on-demand runs from any branch)
+#
+# Failure policy: identical to CI — any invariant breach or handler revert
+# fails the run and alerts through the usual channels (issue on failure is
+# auto-filed when issues are enabled).
+name: Nightly fuzz campaign
+
+on:
+  schedule:
+    - cron: "33 2 * * *"
+  workflow_dispatch:
+  push:
+    paths: ["ora-mvp/.fuzz-trigger"]
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Invariant suites (10k runs × depth 100)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ora-mvp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Nightly invariant campaign (WTBill custody, sorUSD backing)
+        run: FOUNDRY_PROFILE=nightly forge test
+      - name: Campaign summary
+        if: always()
+        run: |
+          {
+            echo "## Nightly fuzz campaign"
+            echo
+            echo "Profile: \`nightly\` (invariant 10,000 runs × depth 100, fuzz 5,000 runs, fail_on_revert)"
+            echo "Suites: WTBill custody + skim, SorUSDVault share price + backing"
+            echo
+            echo "CI's per-push profile is 256×24 — this campaign searches ~40× deeper for rare state paths."
+          } >> "$GITHUB_STEP_SUMMARY"

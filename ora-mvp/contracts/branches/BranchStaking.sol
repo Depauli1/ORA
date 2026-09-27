@@ -226,10 +226,6 @@ contract BranchStaking is ILQTYStaking, OraOwnable, OraCheckContract {
         require(msg.sender == borrowerOperationsAddress, "LQTYStaking: caller is not BorrowerOps");
     }
 
-     function _requireCallerIsActivePool() internal view {
-        require(msg.sender == activePoolAddress, "LQTYStaking: caller is not ActivePool");
-    }
-
     function _requireUserHasStake(uint256 currentStake) internal pure {
         require(currentStake > 0, 'LQTYStaking: User must have a non-zero stake');
     }

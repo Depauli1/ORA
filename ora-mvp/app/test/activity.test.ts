@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { state } from "../src/state";
-import { addActivity, hydrateActivity, updateActivity } from "../src/activity";
+import { addActivity, hydrateActivity, updateActivity, renderActivity } from "../src/activity";
 
 const STORAGE_KEY = "ora.transaction-activity.v1";
 
@@ -101,5 +101,64 @@ describe("transaction activity", () => {
     expect(document.querySelector(".activity-meta")?.textContent).toContain("Base");
     expect(document.querySelector(".activity-meta")?.textContent).not.toContain("Untrusted");
     expect(document.querySelector(".activity-message")?.textContent).toMatch(/after page reload/);
+  });
+});
+
+describe("activity edge cases", () => {
+  it("hydrates unknown network modes as local and keeps optional diagnostic fields", () => {
+    mountActivityPanel();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([
+      {
+        id: "r1", label: "Withdraw collateral", netMode: "bogus-net", status: "failed",
+        createdAt: Date.now() - 5000,
+        errorCode: "PROTOCOL_REJECTED",
+        recovery: "Lower the withdrawal and retry.",
+        technical: "CALL_EXCEPTION\nreverted with 'MCR'",
+      },
+      {
+        id: "r2", label: "Open Trove", netMode: "baseSepolia", status: "confirmed",
+        createdAt: Date.now() - 60000, hash: "0xdef456",
+        technical: "raw trace without a code",
+      },
+    ]));
+    hydrateActivity();
+    expect(state.activity).toHaveLength(2);
+    const byLabel = (label: string) => state.activity.find((r) => r.label === label)!;
+    const bogus = byLabel("Withdraw collateral");
+    expect(bogus.netMode).toBe("local"); // coerced
+    expect(bogus.netLabel).toBe("Local demo chain");
+    expect(bogus.errorCode).toBe("PROTOCOL_REJECTED");
+    expect(bogus.recovery).toBe("Lower the withdrawal and retry.");
+    expect(bogus.technical).toContain("CALL_EXCEPTION");
+    expect(bogus.hash).toBeUndefined();
+    expect(byLabel("Open Trove").netLabel).toBe("Base Sepolia");
+    // technical details render with and without an error code
+    const summaries = Array.from(document.querySelectorAll(".activity-technical summary"))
+      .map((s) => s.textContent);
+    expect(summaries).toContain("Technical details · PROTOCOL_REJECTED");
+    expect(summaries).toContain("Technical details");
+  });
+
+  it("maps addActivity for unknown network modes onto the local label", () => {
+    mountActivityPanel();
+    state.activity = [];
+    addActivity("Claim test ORA", "not-a-network");
+    expect(state.activity[0].netMode).toBe("not-a-network");
+    expect(state.activity[0].netLabel).toBe("Local demo chain");
+  });
+
+  it("renderActivity tolerates a missing list or summary element", () => {
+    mountActivityPanel();
+    state.activity = [];
+    document.getElementById("activityList")!.remove();
+    expect(() => renderActivity()).not.toThrow(); // early return, no list
+
+    mountActivityPanel();
+    state.activity = [];
+    const id = addActivity("Borrow orUSD", "local");
+    updateActivity(id, { status: "preparing" });
+    document.getElementById("activitySummary")!.remove();
+    expect(() => renderActivity()).not.toThrow(); // rows render, summary skipped
+    expect(document.querySelector(".activity-item")?.textContent).toContain("Borrow orUSD");
   });
 });

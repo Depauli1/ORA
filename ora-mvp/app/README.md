@@ -1,7 +1,7 @@
 # ORA frontend
 
 TypeScript + Vite app served by the hardened Node server (`../server.js`).
-Strict `tsc`, 74 vitest tests, and two Playwright e2e tests — all gated in CI.
+Strict `tsc`, 82 vitest tests, and four Playwright e2e specs — all gated in CI.
 
 ## Commands (from `ora-mvp/`)
 
@@ -12,8 +12,15 @@ Strict `tsc`, 74 vitest tests, and two Playwright e2e tests — all gated in CI.
 | `npm run app` | Build + serve production bundle via `server.js` |
 | `npm run app:dev` | Serve without rebuilding (expects `app/dist/`) |
 | `npm run typecheck` | `tsc --noEmit` (strict, covers src + tests + e2e) |
-| `npm run test:ui` | `vitest run` — server + UI suites (52 tests) |
+| `npm run test:ui` | `vitest run` — server + UI suites |
 | `npm run test:e2e` | Playwright e2e — **CI only** (browser binaries + fresh chain stack) |
+
+e2e inventory (4 specs, `e2e/`): boot → faucet → open trove (including the
+review-dialog step); mobile 375px viewport + section switching; network
+switch mid-session (safe unavailable state on an unpublished testnet,
+restore on switch-back); redemption through the full hint pipeline (the
+chain is warped past the 14-day bootstrap by `scripts/e2e-warp.js`, with
+aggregator refreshes so the oracles stay live).
 
 Local full stack: `npm run chain`, `npm run deploy`, then `npm run app`.
 
@@ -42,8 +49,47 @@ Local full stack: `npm run chain`, `npm run deploy`, then `npm run app`.
 - `views.ts` — read path + rendering (`refresh()`, troves table, health and adjustment previews)
 - `actions.ts` — section navigation and button/input wiring
 - `activity.ts` — persistent transaction lifecycle/history with explorer links
-- `dom.ts` / `format.ts` — typed element access + toast; number formatting
+- `dom.ts` / `format.ts` — typed element access + toast; **all** user-facing number formatting (single `NUMBER_LOCALE`; numeric serialization for `parseEther` deliberately stays locale-free)
 - `wallet-gate.ts` — `isLocalhost()` (shared with tests)
+
+## Data refresh & RPC budget
+
+One `refresh()` is a ~22-call batched RPC round-trip. The scheduler in
+`main.ts` (policy in `state.ts::nextPollDelayMs`, unit-tested) spends that
+quota deliberately:
+
+- healthy: fixed 8s cadence
+- failing: exponential backoff 8 → 16 → 32 → 60s cap (the stale-data lockout
+  in `views.ts` already pauses risk-increasing actions, so backing off never
+  trades safety for quota)
+- tab hidden: **no RPC at all**; one immediate catch-up refresh on return
+- a transaction in flight (`state.busy`): polling pauses, the `tx()` wrapper
+  drives the final refresh
+
+At demo scale this is politeness; on public RPCs it is a product constraint —
+budget it accordingly (a subgraph/indexer remains the scale-out path).
+
+## Bundle & performance budget
+
+- Boot path: `index` + `ethers` vendor chunk ≈ **150KB gzipped** total
+  (`vite.config.ts` pins ethers in a stable chunk so app deploys don't
+  invalidate the big download for returning visitors).
+- WalletConnect (~408KB raw, incl. `@walletconnect/core`) is
+  dynamic-import-only — fetched when a user actually connects a mobile
+  wallet, never at boot.
+- Budget rule: keep the boot path ≤ ~170KB gzipped; raise it only with a
+  recorded reason. The Phase 3 mobile-first app is a **separate build** with
+  its own, tighter budget — this app is the testnet/power-user console and
+  stays deliberately lean (no framework, one store, ~100 DOM ids).
+
+## Accessibility
+
+`aria-live` status regions, `role="meter"` with value semantics, visually
+hidden labels, `inputmode="decimal"`, a hand-rolled focus trap + `inert`
+background in the review dialog, `:focus-visible`, `prefers-reduced-motion`,
+`prefers-contrast: more` (brighter muted ramp, thicker borders/focus ring),
+and `pointer: coarse` 44px minimum touch targets. e2e asserts the 375px
+viewport never overflows horizontally.
 
 ## Security properties (tested)
 

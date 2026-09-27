@@ -88,7 +88,9 @@ export async function connectWithProvider(injected: Eip1193, via: string): Promi
     const bp = new ethers.BrowserProvider(injected as unknown as ethers.Eip1193Provider);
     await bp.send("eth_requestAccounts", []);
     const signer = (await bp.getSigner()) as AppSigner;
-    signer.address = await signer.getAddress();
+    // NB: JsonRpcSigner exposes `address` as a read-only getter — assigning
+    // to it throws, which used to break every injected-wallet connection.
+    // The getter is authoritative, so nothing needs caching here.
     guardSigner(signer, bp);
     state.provider = bp;
     state.wallet = signer;

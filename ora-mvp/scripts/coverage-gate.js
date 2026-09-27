@@ -1,5 +1,13 @@
-// ORA coverage gate — Tier 3 (wholly new ORA code) must hold >=85% line
-// coverage. Tier 0/1/2 (audited/upstream-derived) are reported, not gated.
+// ORA coverage gate — Tier 3 (wholly new ORA code) must hold 100% line and
+// function coverage and >=99.7% branch coverage. Tier 0/1/2
+// (audited/upstream-derived) are reported, not gated (their assurance comes
+// from the upstream audits + the differential suite, not line coverage).
+//
+// Thresholds are ratchets: measured 2026-09 at 100.00% lines / 99.73%
+// branches / 100.00% functions. The only uncovered branch is the OraSwapPool
+// mainnet backstop (chain id 1/8453 deploy refusal), which by design cannot
+// fire on any test chain — Hardhat cannot switch chain ids and forks keep the
+// locally configured one. Raise the floors as coverage improves; never lower.
 //
 //   COVERAGE=1 npx hardhat coverage && node scripts/coverage-gate.js
 //   (or: npm run coverage)
@@ -7,7 +15,8 @@ const fs = require("fs");
 const path = require("path");
 
 const COV = path.join(__dirname, "..", "coverage.json");
-const MIN_TIER3_LINES = 85;
+const MIN_TIER3_LINES = 100;
+const MIN_TIER3_BRANCHES = 99.7;
 
 // Tier 3 = everything in these dirs/files (see AUDIT_DIFF.md Tier 3).
 const TIER3 = [
@@ -38,7 +47,7 @@ const isTier3 = f => !isScaffold(f) && TIER3.some(t => f === t || (t.endsWith("/
 function pct(hit, total) { return total === 0 ? 100 : 100 * hit / total; }
 
 const cov = JSON.parse(fs.readFileSync(COV));
-let tHit = 0, tTot = 0;
+let tHit = 0, tTot = 0, tBrHit = 0, tBrTot = 0, tFnHit = 0, tFnTot = 0;
 const rows = [];
 for (const [file, data] of Object.entries(cov)) {
   const rel = path.relative(path.join(__dirname, ".."), file);
@@ -48,7 +57,11 @@ for (const [file, data] of Object.entries(cov)) {
   let bHit = 0, bTot = 0;
   for (const arr of Object.values(brMap)) for (const x of arr) { bTot++; if (x > 0) bHit++; }
   const tag = isTier3(rel) ? "T3" : "  ";
-  if (isTier3(rel)) { tHit += sHit; tTot += sTot; }
+  if (isTier3(rel)) {
+    tHit += sHit; tTot += sTot;
+    tBrHit += bHit; tBrTot += bTot;
+    tFnHit += fHit; tFnTot += fTot;
+  }
   rows.push([tag, rel, pct(sHit, sTot), pct(bHit, bTot), pct(fHit, fTot)]);
 }
 rows.sort((a, b) => a[1].localeCompare(b[1]));
@@ -57,9 +70,18 @@ console.log("     %lines %branch %func  file");
 for (const [tag, rel, l, b, f] of rows)
   console.log(`  ${tag} ${l.toFixed(1).padStart(6)} ${b.toFixed(1).padStart(7)} ${f.toFixed(1).padStart(5)}  ${rel}`);
 const t3 = pct(tHit, tTot);
-console.log(`\nTier 3 aggregate line coverage: ${t3.toFixed(2)}% (gate: >= ${MIN_TIER3_LINES}%)`);
+const t3b = pct(tBrHit, tBrTot);
+const t3f = pct(tFnHit, tFnTot);
+console.log(`\nTier 3 aggregate: ${t3.toFixed(2)}% lines (gate: >= ${MIN_TIER3_LINES}%), `
+  + `${t3b.toFixed(2)}% branches (gate: >= ${MIN_TIER3_BRANCHES}%), ${t3f.toFixed(2)}% functions`);
+let failed = false;
 if (t3 < MIN_TIER3_LINES) {
-  console.error("COVERAGE GATE FAILED");
-  process.exit(1);
+  console.error(`COVERAGE GATE FAILED: Tier 3 line coverage ${t3.toFixed(2)}% < ${MIN_TIER3_LINES}%`);
+  failed = true;
 }
+if (t3b < MIN_TIER3_BRANCHES) {
+  console.error(`COVERAGE GATE FAILED: Tier 3 branch coverage ${t3b.toFixed(2)}% < ${MIN_TIER3_BRANCHES}%`);
+  failed = true;
+}
+if (failed) process.exit(1);
 console.log("coverage gate passed.");

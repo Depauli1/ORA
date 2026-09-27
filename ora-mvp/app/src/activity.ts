@@ -69,7 +69,7 @@ export function hydrateActivity(): void {
           const validNetMode = typeof item.netMode === "string" &&
             Object.prototype.hasOwnProperty.call(NETWORKS, item.netMode);
           const netMode = validNetMode ? item.netMode : "local";
-          const net = NETWORKS[netMode] || NETWORKS.local;
+          const net = NETWORKS[netMode]; // netMode is validated or coerced to "local" above
           return {
             id: item.id.slice(0, 160),
             label: item.label.slice(0, 200),

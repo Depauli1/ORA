@@ -1,0 +1,120 @@
+{
+  "$comment": [
+    "Slither triage for TIER 2 (forks of audited Liquity v1 code — AUDIT_DIFF.md).",
+    "Policy: Tier-2 HIGHs fail unless an entry here cites an audited base AND the gate",
+    "mechanically proves the finding is inherited (same detector on the same function,",
+    "anchored in Tier 0/1). Tier-2 MEDIUMs fail unless listed here with a reason.",
+    "Tier-2 LOW/INFO findings are reported but not gated — the audited upstream carries",
+    "the same classes and they are accepted by Liquity's audits.",
+    "When Slither adds a detector or the forks change, the gate fails until each new",
+    "finding is either fixed or consciously added here. That is the point: zero silent",
+    "findings in the fork-kill-zone. Keep reasons short, specific and honest."
+  ],
+  "triage": [
+    {
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "path": "contracts/rates/StabilityPoolRates.sol",
+      "inheritedFrom": "contracts/StabilityPool.sol (audited Liquity v1)",
+      "reason": "SP sends ETH gains to depositors — v1's audited pattern, unchanged."
+    },
+    {
+      "check": "uninitialized-state",
+      "impact": "High",
+      "path": "contracts/rates/",
+      "inheritedFrom": "contracts/BorrowerOperations.sol / contracts/StabilityPool.sol (audited Liquity v1)",
+      "reason": "Storage zero-init semantics identical to the audited base files."
+    },
+    {
+      "check": "uninitialized-state",
+      "impact": "High",
+      "path": "contracts/rwa/",
+      "inheritedFrom": "contracts/branches/TroveManagerV2.sol -> contracts/TroveManager.sol (audited)",
+      "reason": "Constants-only RWA rebase; storage layout identical to the audited base."
+    },
+    {
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "path": "contracts/branches/",
+      "reason": "v1 checks-effects-interactions ordering preserved verbatim; external calls settle after state updates; ERC20 custody pushes go only to protocol pools via the audited ICollateralReceiver pattern. State equivalence vs the v1 engine is asserted per-op by test/differential.test.js."
+    },
+    {
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Same audited CEI ordering inherited via the TroveManager fork; the rates delta (lazy interest accrual, rate-keyed list) settles all state before external calls. Covered by ratesBranch + differential suites."
+    },
+    {
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "path": "contracts/rwa/",
+      "reason": "Constants-only rebase of V2/ERC20 forks — the audited CEI ordering is untouched (AUDIT_DIFF: 8-line constants delta per file)."
+    },
+    {
+      "check": "divide-before-multiply",
+      "impact": "Medium",
+      "path": "contracts/branches/",
+      "reason": "Error-corrected per-unit-staked redistribution/reward math (StabilityPoolERC20, TroveManagerV2) — division-before-multiplication is documented as intended in the contract source and accepted by Liquity v1's audits; constructor-constant findings are the fork's re-expression of the same audited literals."
+    },
+    {
+      "check": "divide-before-multiply",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Same error-corrected redistribution/reward math inherited from the audited v1 pools via the fork chain (TroveManagerRates, StabilityPoolRates, BorrowerOperationsRates); the rates delta does not touch these expressions."
+    },
+    {
+      "check": "divide-before-multiply",
+      "impact": "Medium",
+      "path": "contracts/rwa/",
+      "reason": "Error-corrected per-unit-staked redistribution math — division-before-multiplication is documented as intended in the contract source and accepted by Liquity v1's audits; the constructor-constant findings are the same audited literals re-expressed at MCR 105%/floor 103%."
+    },
+    {
+      "check": "incorrect-equality",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Strict-equality guards on stake/reward accumulators mirror the audited v1 TroveManager; the equal states are only reachable through protocol-settled accumulators and are exercised by the rates-branch and differential suites."
+    },
+    {
+      "check": "uninitialized-local",
+      "impact": "Medium",
+      "path": "contracts/branches/",
+      "reason": "Memory struct locals (liquidation / trove-adjustment stacks) mirror the audited base declarations — Solidity 0.6 zero-initializes; no semantic delta vs the base files."
+    },
+    {
+      "check": "uninitialized-local",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Memory struct locals mirror the audited base declarations (Solidity 0.6 zero-initializes); the rates fork changes the list keying, not the locals."
+    },
+    {
+      "check": "uninitialized-local",
+      "impact": "Medium",
+      "path": "contracts/rwa/",
+      "reason": "Memory struct locals in the constants-only rebase mirror the audited base declarations (Solidity 0.6 zero-initializes); no semantic delta vs the base."
+    },
+    {
+      "check": "unused-return",
+      "impact": "Medium",
+      "path": "contracts/branches/",
+      "reason": "Unchecked returns on protocol-wired calls (sorted-list insert, token mint) in openTrove follow the audited v1 pattern (BorrowerOperations.openTrove ignores the same returns); counterparties revert on failure."
+    },
+    {
+      "check": "unused-return",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Unchecked returns on protocol-wired calls (sorted-list insert, token mint) follow the audited v1 pattern (openTrove in BorrowerOperations.sol ignores the same returns); counterparties revert on failure."
+    },
+    {
+      "check": "unused-return",
+      "impact": "Medium",
+      "path": "contracts/rates/",
+      "reason": "Unchecked returns on protocol-wired calls (sorted-list insert, token mint) follow the audited v1 pattern (openTrove in BorrowerOperations.sol ignores the same returns); counterparties revert on failure."
+    },
+    {
+      "check": "unused-return",
+      "impact": "Medium",
+      "path": "contracts/rwa/",
+      "reason": "Unchecked returns inherited from BorrowerOperationsERC20's audited-pattern openTrove path; counterparties are protocol contracts that revert on failure."
+    }
+  ]
+}

@@ -15,7 +15,13 @@ export default defineConfig({
   },
   webServer: {
     command: "bash scripts/e2e-up.sh",
-    url: "http://127.0.0.1:3100/config",
+    // Readiness probe must hit a STATIC path: /config (and every other API
+    // route) sits behind the 120 req/min per-IP limiter, and Playwright's
+    // startup polling would exhaust that budget — the app's own first
+    // /config fetch would then 429, silently degrade to the no-faucet
+    // default config, and hide the faucet row (observed in CI). Static
+    // files are not rate-limited.
+    url: "http://127.0.0.1:3100/",
     timeout: 240_000,
     reuseExistingServer: !process.env.CI,
     env: { PORT: "3100" },

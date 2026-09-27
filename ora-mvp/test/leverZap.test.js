@@ -145,6 +145,132 @@ describe("LeverZap (one-click leverage)", () => {
     });
   });
 
+  describe("edge coverage: leftover sweeps, unwind guards, hostile counterparties", () => {
+    it("sweeps orUSD left over when the loop budget runs out mid-compound", async () => {
+      const { zap, bob, zapAddr, orUSD } = await loadFixture(zapFixture);
+      // _loops = 1: after one compound round the freshly withdrawn orUSD is
+      // left in the zap and must be swept into collateral by the cleanup
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 1, 5000, { value: E("4") });
+      const [, , , status] = await zap.position();
+      expect(status).to.equal(1n);
+      expect(await orUSD.balanceOf(zapAddr)).to.equal(0n);
+      expect(await ethers.provider.getBalance(zapAddr)).to.equal(0n);
+      await zap.connect(bob).leverClose(2000);
+    });
+
+    it("leverClose reverts when the unwind cannot make progress (price dropped)", async () => {
+      const { zap, bob, agg } = await loadFixture(zapFixture);
+      await zap.connect(bob).leverOpen(E("0.05"), 6000, 6, 5000, { value: E("3") });
+      // -50% is the largest single move the feed accepts; at $1000 the
+      // position has no equity and the unwind cannot make progress
+      await agg.setAnswer(1000n * 10n ** 8n);
+      await expect(zap.connect(bob).leverClose(2000))
+        .to.be.revertedWith("LeverZap: cannot unwind further (ICR too thin)");
+    });
+
+    it("leverClose enforces the aggregate slippage budget on the way out", async () => {
+      const h = await loadFixture(hostileFixture);
+      // healthy-looking entry, the pool funds exactly one close round but pays
+      // no ETH back for the leftover orUSD — equity0 > 0 and balance == 0
+      // must trip the aggregate bound for any budget below 100%
+      await h.htm.setDebtColl(E("10000"), E("7"));
+      const pool = await h.mkPool(0, E("10200"));
+      const zap = await h.mkZap(pool);
+      await expect(zap.leverClose(2000)).to.be.revertedWith("LeverZap: slippage exceeded");
+    });
+
+    it("the ETH sweep to an owner that cannot receive ETH reverts", async () => {
+      const { bob, bo, tm, feed, pool, orUSD } = await loadFixture(zapFixture);
+      const rejector = await (await ethers.getContractFactory("EthRejector")).deploy();
+      await rejector.waitForDeployment();
+      const LZ = await ethers.getContractFactory("LeverZap");
+      const zap2 = await LZ.deploy(await rejector.getAddress(), await bo.getAddress(),
+        await tm.getAddress(), await feed.getAddress(), await pool.getAddress(), await orUSD.getAddress());
+      await zap2.waitForDeployment();
+      // fund the rejector (it still accepts ETH), drive the open…
+      const [rich] = await ethers.getSigners();
+      await rich.sendTransaction({ to: await rejector.getAddress(), value: E("3") });
+      await rejector.openLevered(await zap2.getAddress(), E("0.05"), 6000, 6, 5000, { value: E("2") });
+      // …then flip it into reject mode: the exit sweep must fail loudly
+      await rejector.setRejectEth(true);
+      await expect(rejector.closeLevered(await zap2.getAddress(), 2000))
+        .to.be.revertedWith("LeverZap: ETH sweep failed");
+    });
+
+    it("exec surfaces a failing call", async () => {
+      const { zap, bob } = await loadFixture(zapFixture);
+      const rejector = await (await ethers.getContractFactory("EthRejector")).deploy();
+      await rejector.waitForDeployment();
+      const data = rejector.interface.encodeFunctionData("boom");
+      await expect(zap.connect(bob).exec(await rejector.getAddress(), data, 0))
+        .to.be.revertedWith("LeverZap: exec failed");
+    });
+
+    // Hostile counterparties: the zap must not trust its engines or its pool.
+    // A pool that takes the orUSD but pays no collateral leaves the reported
+    // position with no equity — the aggregate guard must refuse to open.
+    async function hostileFixture() {
+      const f = await loadFixture(zapFixture);
+      const { deployer, bo, tm, feed } = f;
+      const Flaky = await ethers.getContractFactory("MockFlakyToken");
+      const orUSD2 = await Flaky.deploy();
+      await orUSD2.waitForDeployment();
+      const htm = await (await ethers.getContractFactory("HostileTM")).deploy();
+      await htm.waitForDeployment();
+      const hbo = await (await ethers.getContractFactory("HostileBO")).deploy(await htm.getAddress());
+      await hbo.waitForDeployment();
+      await orUSD2.faucet(E("50000")); // the hostile pools pay out from this
+      const HP = await ethers.getContractFactory("HostilePool");
+      const mkPool = async (ethOut, orUsdOut) => {
+        const p = await HP.deploy(await orUSD2.getAddress(), BigInt(ethOut), BigInt(orUsdOut));
+        await p.waitForDeployment();
+        await orUSD2.transfer(await p.getAddress(), BigInt(orUsdOut) + 500n);
+        return p;
+      };
+      const LZ = await ethers.getContractFactory("LeverZap");
+      const mkZap = async (pool) => {
+        const z = await LZ.deploy(deployer.address, await hbo.getAddress(), await htm.getAddress(),
+          await feed.getAddress(), await pool.getAddress(), await orUSD2.getAddress());
+        await z.waitForDeployment();
+        return z;
+      };
+      return { ...f, deployer, orUSD2, htm, hbo, mkPool, mkZap };
+    }
+
+    it("refuses to open when the engines/pool leave no equity at all", async () => {
+      const h = await loadFixture(hostileFixture);
+      // engine reports the minimum debt with zero collateral; the pool pays
+      // no ETH for the orUSD it takes
+      await h.htm.setDebtColl(E("1800"), 0);
+      await h.htm.setStatus(0); // no position yet — the open guard must pass
+      const pool = await h.mkPool(0, 0);
+      const zap = await h.mkZap(pool);
+      await expect(zap.leverOpen(E("0.05"), 6000, 6, 5000, { value: E("2") }))
+        .to.be.revertedWith("LeverZap: slippage exceeded");
+    });
+
+    it("gives up after 20 unwind rounds and reverts 'unwind incomplete'", async () => {
+      const h = await loadFixture(hostileFixture);
+      // a big healthy-looking position, but the pool pays 1 wei per round —
+      // 20 rounds cannot retire the debt, so the close must abort loudly
+      await h.htm.setDebtColl(E("10000"), E("7"));
+      const pool = await h.mkPool(0, 1);
+      const zap = await h.mkZap(pool);
+      await expect(zap.leverClose(2000))
+        .to.be.revertedWith("LeverZap: unwind incomplete — try again or use exec()");
+    });
+
+    it("exits cleanly when a full unwind leaves nothing to sweep", async () => {
+      const h = await loadFixture(hostileFixture);
+      // debt exactly covers the gas compensation, collateral zero: the close
+      // path exits on round 1 with no orUSD and no ETH left behind
+      await h.htm.setDebtColl(E("200"), 0);
+      const pool = await h.mkPool(0, 0);
+      const zap = await h.mkZap(pool);
+      await expect(zap.leverClose(2000)).to.emit(zap, "LeverClosed").withArgs(0, 0);
+    });
+  });
+
   describe("FUZZ: open/close round trips across deposits and LTVs", () => {
     it("always closes fully and returns >95% of the deposit", async () => {
       const { zap, tm, orUSD, bob, zapAddr, agg } = await loadFixture(zapFixture);

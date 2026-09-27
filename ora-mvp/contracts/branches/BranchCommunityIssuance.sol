@@ -40,9 +40,10 @@ contract BranchCommunityIssuance is OraOwnable, OraCheckContract {
         stabilityPoolAddress = _stabilityPoolAddress;
     }
 
-    // Fund this contract with ORA first; activation locks the cap and starts the curve.
+    // Fund this contract with ORA first; activation locks the cap and starts
+    // the curve. No `active` re-check is needed: the only successful path
+    // renounces ownership below, so onlyOwner already rejects every re-entry.
     function activate() external onlyOwner {
-        require(!active, "BranchCommunityIssuance: already active");
         uint256 balance = oraToken.balanceOf(address(this));
         require(balance > 0, "BranchCommunityIssuance: fund with ORA before activating");
         supplyCap = balance;

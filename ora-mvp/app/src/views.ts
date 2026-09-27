@@ -11,7 +11,7 @@ import { myZap, connectContracts } from "./contracts";
 import { tx } from "./wallet";
 import { updateSimControls } from "./network";
 import { $, input, button } from "./dom";
-import { fmt, fmtUsd, short, icrClass, reason } from "./format";
+import { fmt, fmtNum, fmtPct, fmtUsd, fmtUsdNum, short, icrClass, reason } from "./format";
 import {
   adjustmentPreviews, healthExplanation, healthMeterPct, healthTier,
   openPreview as calculateOpenPreview,
@@ -93,7 +93,7 @@ function updatePositionHealth(): void {
     "positionHealthMeter", "positionHealthFill", "positionHealthBadge", icr, brMcr(),
     blocked ? "unknown" : tier,
   );
-  $("tvIcr").textContent = Number.isFinite(icr) ? `${icr.toFixed(1)}%` : "—";
+  $("tvIcr").textContent = Number.isFinite(icr) ? `${fmtPct(icr)}` : "—";
   $("tvIcr").className = blocked || !Number.isFinite(icr) ? "warn" : icrClass(icr, brMcr() * 100);
   $("positionRiskMessage").textContent = blocked
     ? `${Number.isFinite(icr) ? `Last-known ratio ${displayEstimate(icr, 1)}%. ` : "Current ratio unavailable. "}${blocked} Risk-increasing actions are paused until the data is healthy.`
@@ -105,7 +105,7 @@ function applyBranchVisibility(): void {
   const testnet = NETWORKS[state.netMode].testnet;
   // Mock-collateral faucets exist only on testnets.
   $("btnWstFaucet").hidden = isNative() || !testnet;
-  $("btnWstFaucet").textContent = `Get ${Number(faucetAmt()).toLocaleString("en-US")} test ${collSym()}`;
+  $("btnWstFaucet").textContent = `Get ${fmtNum(Number(faucetAmt()))} test ${collSym()}`;
   $("balWst").hidden = isNative();
   // Market/oracle simulators are explicitly disclosed testnet tools.
   $("simTools").hidden = !testnet;
@@ -113,7 +113,7 @@ function applyBranchVisibility(): void {
   $("simSub").textContent = "Developer-only oracle controls; not available on mainnet.";
   $("riskSub").textContent = testnet
     ? `Nearest liquidation risk for ${collSym()} collateral; simulator is testnet-only.`
-    : `Troves nearest liquidation below ${(brMcr() * 100).toFixed(0)}% for ${collSym()} collateral.`;
+    : `Troves nearest liquidation below ${fmtPct(brMcr() * 100, 0)} for ${collSym()} collateral.`;
   const { C } = state;
   $("depegRow").hidden = !(testnet && !isNative() && bcfg().stEthEthAggregator);
   $("seqRow").hidden = !(testnet && C.aggSeq && !isRWA());
@@ -197,15 +197,15 @@ export async function refresh(): Promise<boolean> {
     button("btnOpenCollMax").disabled = !state.wallet || state.collateralBalance <= 0n;
     button("btnAdjCollMax").disabled = !state.wallet || state.collateralBalance <= 0n;
     button("btnAdjDebtMax").disabled = !state.wallet || state.orUsdBalance <= 0n;
-    $("stTcr").textContent = nTroves > 0n ? (Number(tcr) / 1e16).toFixed(1) + "%" : "—";
+    $("stTcr").textContent = nTroves > 0n ? fmtPct(Number(tcr) / 1e16) : "—";
     $("stMode").textContent = recovery ? "RECOVERY" : "Normal";
     $("stMode").className = recovery ? "bad" : "good";
     $("stSupply").textContent = fmt(supply, 0) + " orUSD";
     $("stTroves").textContent = nTroves.toString();
     $("stSp").textContent = fmt(spTotal, 0) + " orUSD";
-    $("stFee").textContent = (Number(rate) / 1e16).toFixed(2) + "%";
+    $("stFee").textContent = fmtPct(Number(rate) / 1e16, 2);
 
-    if (C.aggRate) $("simRate").textContent = Number(ethers.formatEther(stRate[0])).toFixed(3);
+    if (C.aggRate) $("simRate").textContent = fmtNum(Number(ethers.formatEther(stRate[0])), 3);
     if (C.aggSeq && !isRWA()) {
       try {
         const [up, rd] = await Promise.all([C.priceFeed.sequencerUp(), C.aggSeq.latestRoundData()]);
@@ -219,12 +219,12 @@ export async function refresh(): Promise<boolean> {
     }
     if (C.aggNav) {
       const nav = await C.aggNav.latestRoundData();
-      $("simNav").textContent = "$" + (Number(nav[1]) / 1e8).toFixed(4);
+      $("simNav").textContent = fmtUsdNum(Number(nav[1]) / 1e8, 4);
     }
 
     if (C.aggEth) {
       const rd = await C.aggEth.latestRoundData();
-      $("simPrice").textContent = "$" + (Number(rd[1]) / 1e8).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      $("simPrice").textContent = fmtUsdNum(Number(rd[1]) / 1e8);
     } else {
       $("simPrice").textContent = fmtUsd(p) + (isNative() ? "" : ` (${collSym()})`);
     }
@@ -248,9 +248,9 @@ export async function refresh(): Promise<boolean> {
       const tier = healthTier(icr, brMcr());
       $("tvColl").textContent = fmt(coll, 4) + " " + collSym();
       $("tvDebt").textContent = fmt(debt) + " orUSD";
-      $("tvIcr").textContent = Number.isFinite(icr) ? icr.toFixed(1) + "%" : "—";
+      $("tvIcr").textContent = Number.isFinite(icr) ? fmtPct(icr) : "—";
       $("tvIcr").className = icrClass(icr, brMcr() * 100);
-      $("tvLiq").textContent = liqPrice > 0 ? "$" + liqPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—";
+      $("tvLiq").textContent = liqPrice > 0 ? fmtUsdNum(liqPrice) : "—";
       updateHealthMeter("positionHealthMeter", "positionHealthFill", "positionHealthBadge", icr, brMcr());
       const riskCopy = healthExplanation(tier, icr, brMcr(), liqPrice, state.price);
       $("positionRiskMessage").textContent = riskCopy;
@@ -273,7 +273,7 @@ export async function refresh(): Promise<boolean> {
     $("spEthGain").textContent = fmt(spEth, 5) + " " + collSym();
     $("spOraGain").textContent = fmt(spOra, 3) + " ORA";
     $("spShare").textContent = spTotal > 0n
-      ? (Number(spDep) / Number(spTotal) * 100).toFixed(2) + "%" : "0%";
+      ? fmtPct(Number(spDep) / Number(spTotal) * 100, 2) : "0%";
 
     $("stkAmount").textContent = fmt(stake) + " ORA";
     $("stkEth").textContent = fmt(stkEth, 5) + " " + (C.branchStakingMode ? collSym() : "ETH");
@@ -289,15 +289,15 @@ export async function refresh(): Promise<boolean> {
         C.vault.balanceOf(me),
         C.router.pending()
       ]);
-      $("tvRate").textContent = (Number(myRate) / 1e16).toFixed(2) + "% /yr";
-      $("svPrice").textContent = Number(ethers.formatEther(svP)).toFixed(6) + " orUSD";
+      $("tvRate").textContent = fmtPct(Number(myRate) / 1e16, 2) + " /yr";
+      $("svPrice").textContent = fmtNum(Number(ethers.formatEther(svP)), 6) + " orUSD";
       $("svTvl").textContent = fmt(svTvl, 0) + " orUSD";
       $("svBal").textContent = fmt(svShares) + " (" + fmt(svShares * svP / 10n ** 18n) + " orUSD)";
       $("svApy").textContent = svTvl > 0n
-        ? (Number(aggW) * 0.8 / Number(svTvl) * 100).toFixed(2) + "%"
+        ? fmtPct(Number(aggW) * 0.8 / Number(svTvl) * 100, 2)
         : "No TVL";
       $("svPending").textContent = fmt(pend);
-      $("stFee").textContent = (sysDebt > 0n ? Number(aggW) / Number(sysDebt) * 100 : 0).toFixed(2) + "%";
+      $("stFee").textContent = fmtPct(sysDebt > 0n ? Number(aggW) / Number(sysDebt) * 100 : 0, 2);
       await refreshLever();
     }
 
@@ -415,16 +415,16 @@ export async function refreshLever(): Promise<void> {
   try {
     if (C.swapPool) {
       const spot = await C.swapPool.spotPrice();
-      $("lvPool").textContent = "$" + Number(ethers.formatEther(spot)).toLocaleString("en-US", { maximumFractionDigits: 0 }) + " /ETH";
+      $("lvPool").textContent = fmtUsdNum(Number(ethers.formatEther(spot)), 0) + " /ETH";
     }
     const zap = await myZap();
     const pos = zap ? await zap.position() : null;
     if (pos && pos[3] === 1n) {
       const debt = pos[0], coll = pos[1];
       const icr = Number(coll) * state.price / Number(debt) * 100;
-      $("lvPos").textContent = fmt(coll, 3) + " ETH @ " + (Number(pos[2]) / 1e16).toFixed(1) + "%";
+      $("lvPos").textContent = fmt(coll, 3) + " ETH @ " + fmtPct(Number(pos[2]) / 1e16);
       $("lvDebt").textContent = fmt(debt) + " orUSD";
-      $("lvIcr").textContent = icr.toFixed(1) + "%";
+      $("lvIcr").textContent = fmtPct(icr);
       $("lvIcr").className = icrClass(icr, brMcr() * 100);
     } else {
       $("lvPos").textContent = "none";
@@ -487,13 +487,13 @@ export function updateOpenPreview(rate?: bigint): void {
     ? "No upfront borrowing fee. Estimated initial debt includes the 200 orUSD gas compensation; interest accrues at the selected rate."
     : "Estimated debt includes the borrowing fee and 200 orUSD gas compensation.";
   $("openFeeNote").textContent = cap > 0
-    ? `${feeNote} This market has a ${cap.toLocaleString("en-US")} orUSD debt cap.`
+    ? `${feeNote} This market has a ${fmtNum(cap)} orUSD debt cap.`
     : feeNote;
 }
 
 function displayEstimate(value: number, decimals = 2): string {
   return Number.isFinite(value)
-    ? value.toLocaleString("en-US", { maximumFractionDigits: decimals })
+    ? fmtNum(value, decimals)
     : "—";
 }
 
@@ -617,7 +617,7 @@ export async function refreshMarketsTable(): Promise<void> {
 
     const mcr = document.createElement("td");
     mcr.dataset.label = "MCR";
-    mcr.textContent = `${((Number(branch.mcr) || 1.1) * 100).toFixed(0)}%`;
+    mcr.textContent = `${fmtPct((Number(branch.mcr) || 1.1) * 100, 0)}`;
 
     const debt = document.createElement("td");
     debt.dataset.label = "Total debt";
@@ -626,7 +626,7 @@ export async function refreshMarketsTable(): Promise<void> {
     const cap = document.createElement("td");
     cap.dataset.label = "Debt cap";
     const debtCap = Number(branch.debtCap || 0);
-    cap.textContent = debtCap > 0 ? `${debtCap.toLocaleString("en-US")} orUSD` : "No cap";
+    cap.textContent = debtCap > 0 ? `${fmtNum(debtCap)} orUSD` : "No cap";
 
     row.append(market, oracle, mcr, debt, cap);
     tbody.appendChild(row);
@@ -672,7 +672,7 @@ export async function refreshTrovesTable(): Promise<void> {
     if (rowRates) {
       const rate = document.createElement("span");
       rate.className = "hint trove-rate";
-      rate.textContent = `@ ${(Number(rowRates[ri]) / 1e16).toFixed(1)}%`;
+      rate.textContent = `@ ${fmtPct(Number(rowRates[ri]) / 1e16)}`;
       ownerCell.appendChild(rate);
     }
     const collateralCell = document.createElement("td");
@@ -684,7 +684,7 @@ export async function refreshTrovesTable(): Promise<void> {
     const ratioCell = document.createElement("td");
     ratioCell.dataset.label = "Collateral ratio";
     ratioCell.className = liq ? "bad" : icr < brMcr() * 100 + 40 ? "warn" : "good";
-    ratioCell.textContent = `${icr.toFixed(1)}%`;
+    ratioCell.textContent = fmtPct(icr);
     const actionsCell = document.createElement("td");
     actionsCell.dataset.label = "Actions";
     const liquidate = document.createElement("button");
@@ -699,7 +699,7 @@ export async function refreshTrovesTable(): Promise<void> {
       const partial = document.createElement("button");
       partial.className = "mini";
       partial.dataset.softliq = owner;
-      partial.title = `Partial liquidation: restores the Trove to ${(brMcr() * 100).toFixed(0)}% at a 3% premium`;
+      partial.title = `Partial liquidation: restores the Trove to ${fmtPct(brMcr() * 100, 0)} at a 3% premium`;
       partial.setAttribute("aria-label", `Soft-liquidate Trove owned by ${short(owner)}`);
       partial.textContent = "Soft-liq";
       actionsCell.appendChild(partial);
@@ -708,11 +708,16 @@ export async function refreshTrovesTable(): Promise<void> {
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll<HTMLButtonElement>("button[data-liq]").forEach((b) =>
-    b.addEventListener("click", () =>
-      tx("Liquidate " + short(b.dataset.liq ?? ""), () => C.troveManager.liquidate(b.dataset.liq)))
+    b.addEventListener("click", () => {
+      // the selector guarantees the attribute exists on these buttons
+      const owner = b.dataset.liq as string;
+      tx("Liquidate " + short(owner), () => C.troveManager.liquidate(owner));
+    })
   );
   tbody.querySelectorAll<HTMLButtonElement>("button[data-softliq]").forEach((b) =>
-    b.addEventListener("click", () =>
-      tx("Soft-liquidate " + short(b.dataset.softliq ?? ""), () => C.troveManager.liquidatePartial(b.dataset.softliq)))
+    b.addEventListener("click", () => {
+      const owner = b.dataset.softliq as string; // see [data-liq] above
+      tx("Soft-liquidate " + short(owner), () => C.troveManager.liquidatePartial(owner));
+    })
   );
 }

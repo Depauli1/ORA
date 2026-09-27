@@ -27,6 +27,14 @@ echo "[e2e] deploying branches..."
 npx hardhat run scripts/deploy.js --network localhost > /tmp/e2e-deploy.log 2>&1
 tail -2 /tmp/e2e-deploy.log
 
+# Jump past the 14-day redemption bootstrap and refresh the settable
+# aggregators (a bare warp would stale every 48h-heartbeat feed and trip
+# the oracle-down lockout). Required by e2e/flows.spec.ts's redemption
+# flow; harmless for the boot/open specs.
+echo "[e2e] warping past redemption bootstrap..."
+npx hardhat run scripts/e2e-warp.js --network localhost > /tmp/e2e-warp.log 2>&1
+tail -2 /tmp/e2e-warp.log
+
 # Treasury = hardhat account #4 — the only ORA holder that can fund drips.
 # (fromPhrase's 2nd arg is the password, not the path — the path goes 3rd.
 # Passing it 2nd silently derives account #0, whose drips revert on-chain.)
